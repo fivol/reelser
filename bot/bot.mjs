@@ -2,6 +2,7 @@
 // Telegram ↔ coding agent bridge for the reels workflow.
 // One owner, one agent turn at a time; messages that arrive mid-turn join it at once.
 import {spawn} from 'node:child_process';
+import {createHash} from 'node:crypto';
 import {existsSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import {join, relative} from 'node:path';
 import {DATA, FIRST_PROJECT, PROJECTS, ROOT, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
@@ -508,12 +509,25 @@ setInterval(() => {
 // Each project keeps its own handoff, so coming back to it picks up where it was left.
 const handoffFile = () => join(studio(), 'handoff.md');
 const projectPath = (slug = state.project) => relative(ROOT, join(PROJECTS, slug)).split('\\').join('/');
-const preamble = () => `You are running as the reels Telegram bot. Follow AGENTS.md and REELS.md. Talk to the owner through your final reply and \`node bot/send.mjs\`; name each stage of your work with \`node bot/send.mjs --status "<emoji> <stage>"\` (e.g. «💡 Придумываю идеи», «🎬 Монтирую v2»). The active project is \`${projectPath()}/\` (\`<project>/\` in REELS.md), ${projectName(state.project) ? `named «${projectName(state.project)}»` : 'not named yet'}.`;
-const handoffPrompt = () => `This session is about to be closed. Bring the files in ${projectPath()}/ up to date first (ideas.md, each touched reel's README.md, PLAYBOOK.md), then write ${projectPath()}/handoff.md: what is in progress, what waits for the owner, which version of which reel was sent last, decisions not yet in files. At most 30 lines. Reply with one word: done.`;
+const preamble = () => `You are running as the reels Telegram bot. Follow AGENTS.md and REELS.md; before your first reply read REELS.md, the project's brief.md and PLAYBOOK.md. Talk to the owner through your final reply and \`node bot/send.mjs\`; name each stage of your work with \`node bot/send.mjs --status "<emoji> <stage>"\` (e.g. «💡 Придумываю идеи», «🎬 Монтирую v2»). The active project is \`${projectPath()}/\` (\`<project>/\` in REELS.md), ${projectName(state.project) ? `named «${projectName(state.project)}»` : 'not named yet'}.`;
+const handoffPrompt = () => `This session is about to be closed. First put everything worth keeping into the files in ${projectPath()}/: reel details, decisions and build notes into that reel's README.md, rules and lessons into PLAYBOOK.md, ideas into ideas.md. Then write ${projectPath()}/handoff.md, only the live state the files do not show: which reel is active (its README path), what was sent last, the question the owner has not answered yet (with its buttons). No reel history, no notes that belong in a file. At most 15 lines. Reply with one word: done.`;
+
+// The agent's instructions; a session that read an older version starts over.
+const INSTRUCTIONS = ['AGENTS.md', 'REELS.md', 'guides'];
+function instructionsHash() {
+  const h = createHash('sha1');
+  for (const f of INSTRUCTIONS) {
+    const path = join(ROOT, f);
+    if (!existsSync(path)) continue;
+    const files = statSync(path).isDirectory() ? readdirSync(path).sort().map((n) => join(path, n)) : [path];
+    for (const file of files) h.update(file).update(readFileSync(file));
+  }
+  return h.digest('hex');
+}
 
 function rotationDue() {
   if (!state.sessionId) return false;
-  if (state.rotate) return true;
+  if (state.rotate || state.instructions !== instructionsHash()) return true;
   const idleHours = (Date.now() - (state.lastTurnAt ?? 0)) / 3_600_000;
   return (state.sessionContext ?? 0) > env.sessionMaxTokens
     || (state.sessionTurns ?? 0) >= env.sessionMaxTurns
@@ -585,7 +599,7 @@ async function runWithStatus(prompt, firstLine, {quiet = false, open = false} = 
 
   await trackUsage(res);
   if (res.sessionId) {
-    if (res.sessionId !== state.sessionId) Object.assign(state, {sessionTurns: 0, sessionContext: 0});
+    if (res.sessionId !== state.sessionId) Object.assign(state, {sessionTurns: 0, sessionContext: 0, instructions: instructionsHash()});
     state.sessionId = res.sessionId;
     state.sessionTurns = (state.sessionTurns ?? 0) + 1;
     if (res.context) state.sessionContext = res.context;
@@ -1078,11 +1092,9 @@ async function applyUpdate() {
   try {
     const subjects = await pendingUpdates();
     if (!subjects.length) return;
-    const changed = await pullUpdates();
+    await pullUpdates();
     // Edited bot files replaced by an archive update were backed up; say where.
     state.updateNote = [...subjects.slice(0, 10), ...(updates.lastBackup ? [T.backedUp(updates.lastBackup)] : [])];
-    // The running session read the old workflow; the next turn starts fresh from a handoff.
-    if (changed.some((f) => /^(REELS|AGENTS)\.md$/.test(f))) state.rotate = true;
     saveState(state);
     if (await botChangedSince(BOOT_HEAD)) return restart();
     await announceUpdate();
