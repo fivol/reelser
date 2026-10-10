@@ -776,7 +776,15 @@ function saveQueue() {
 // running task, and the agent takes it in after its current tool call. An agent CLI
 // that cannot take messages mid-turn (Codex) is interrupted and resumed with it.
 // Background housekeeping and the handoff are not the owner's task: those finish first.
-function enqueue(prompt) {
+// A task the bot starts itself (daily ideas, a merge, a restored queue) only waits in
+// line: the owner's keyboard stays until the agent's next question replaces it.
+function enqueue(prompt, {byOwner = true} = {}) {
+  if (!byOwner) {
+    queue.push(prompt);
+    saveQueue();
+    if (!current) drain();
+    return;
+  }
   clearKeyboard().catch(() => {});
   // While a move to another project waits, new messages are for that project.
   if (current?.open && !state.switchTo && current.handle?.send(prompt)) {
@@ -1063,7 +1071,7 @@ setInterval(async () => {
   if (!waiting) {
     state.ideasWaiting = {project: state.project, at: Date.now(), nudges: 0};
     saveState(state);
-    return enqueue(T.ideasPrompt);
+    return enqueue(T.ideasPrompt, {byOwner: false});
   }
   const gap = Math.min(2 ** (waiting.nudges + 1), 32) * DAY;
   if (Date.now() - waiting.at < gap - DAY / 2) return saveState(state);
@@ -1157,7 +1165,7 @@ async function applyUpdate() {
     if (await botChangedSince(BOOT_HEAD)) return restart();
     await announceUpdate();
   } catch (e) {
-    enqueue(MERGE_PROMPT(e.message.split('\n').slice(0, 5).join('\n')));
+    enqueue(MERGE_PROMPT(e.message.split('\n').slice(0, 5).join('\n')), {byOwner: false});
   }
 }
 
@@ -1235,7 +1243,7 @@ const restored = [state.pending, ...(state.queue ?? [])].filter(Boolean);
 const unbatched = state.batch ?? [];
 delete state.pending;
 state.queue = [];
-for (const prompt of restored) enqueue(prompt);
+for (const prompt of restored) enqueue(prompt, {byOwner: false});
 for (const prompt of unbatched) batch(prompt);
 let offset = state.offset ?? 0;
 let handling = Promise.resolve();
