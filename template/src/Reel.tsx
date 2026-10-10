@@ -59,12 +59,16 @@ export const Reel = () => {
         from += d;
         return seq;
       })}
+      {/* Frame 0 is the cover, so the uploaded cover and the reel's first frame match; hard cut on frame 1. */}
+      <Sequence durationInFrames={1}>
+        <Cover />
+      </Sequence>
       {story.music && <Audio src={staticFile(story.music)} />}
     </AbsoluteFill>
   );
 };
 
-/** Cover: the first scene's headline, fully shown. */
+/** Cover: its own composition for the grid and the feed (guides/frame.md); here the first scene's headline, fully shown. */
 export const Cover = () => (
   <AbsoluteFill>
     <Backdrop />

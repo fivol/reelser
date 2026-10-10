@@ -83,7 +83,7 @@ export async function describe(tg, msg, {transcribe, lang, onInstall}) {
   if (file) {
     if (file.size && file.size > DOWNLOAD_LIMIT) {
       problems.push({kind: 'tooBig', size: mb(file.size), what: file.kind});
-      parts.push(`(attached ${file.kind}, ${mb(file.size)}: too big for the bot to download (Telegram limit 20 MB); the owner was told)`);
+      parts.push(`(attached ${file.kind}, ${mb(file.size)}: too big for the bot to download (Telegram limit 20 MB); the owner was told to resend it compressed, as a link, or to put it on this computer and tell you)`);
     } else {
       const day = new Date().toLocaleDateString('sv');
       mkdirSync(join(inbox(), day), {recursive: true});
@@ -101,7 +101,7 @@ export async function describe(tg, msg, {transcribe, lang, onInstall}) {
         }
       } catch (e) {
         problems.push({kind: 'download', what: file.kind, error: e.message});
-        parts.push(`(attached ${file.kind}, download failed: ${e.message})`);
+        parts.push(`(attached ${file.kind}, download failed: ${e.message}; the owner was told to resend it or put it on this computer)`);
       }
     }
   }
