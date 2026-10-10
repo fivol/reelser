@@ -69,6 +69,7 @@ const T = {
     updateCheckFailed: (e) => `⚠️ Не смог проверить обновления: ${e}`,
     backedUp: (dir) => `твои правки в файлах бота сохранены в ${dir}`,
     ideasPrompt: 'Пачка идей для рилсов: раздел «1. Ideas» в REELS.md.',
+    scheduledIdeasPrompt: (at) => `(The bot started this on its own: daily ideas, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
     ideasNudge: '💡 Идеи с прошлого раза ещё ждут. Прислать свежие?\n\nИли просто напиши, что хочешь: свою идею, правку к рилсу, вопрос — я на связи.',
     ideasFresh: '🎲 Прислать новые',
     ideasStop: '🔕 Не напоминать',
@@ -120,6 +121,7 @@ const T = {
     updateCheckFailed: (e) => `⚠️ Could not check for updates: ${e}`,
     backedUp: (dir) => `your edits to the bot's files are saved in ${dir}`,
     ideasPrompt: 'A batch of reel ideas: section "1. Ideas" in REELS.md.',
+    scheduledIdeasPrompt: (at) => `(The bot started this on its own: daily ideas, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
     ideasNudge: '💡 The ideas from last time are still waiting. Send fresh ones?\n\nOr just tell me what you want: your own idea, an edit, a question — I am here.',
     ideasFresh: '🎲 Send new ones',
     ideasStop: '🔕 Stop reminding',
@@ -1071,7 +1073,7 @@ setInterval(async () => {
   if (!waiting) {
     state.ideasWaiting = {project: state.project, at: Date.now(), nudges: 0};
     saveState(state);
-    return enqueue(T.ideasPrompt, {byOwner: false});
+    return enqueue(T.scheduledIdeasPrompt(ideasAt), {byOwner: false});
   }
   const gap = Math.min(2 ** (waiting.nudges + 1), 32) * DAY;
   if (Date.now() - waiting.at < gap - DAY / 2) return saveState(state);
