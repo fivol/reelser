@@ -25,8 +25,11 @@ export const env = {
   agentModel: process.env.AGENT_MODEL || '',
   // Secret in the t.me/<bot>?start=<code> link that makes its opener the owner.
   ownerCode: process.env.OWNER_CODE || '',
-  // A session is rotated (after a handoff note) when any limit is hit.
-  sessionMaxTokens: Number(process.env.SESSION_MAX_TOKENS || 120_000),
+  // A session is rotated (after a handoff note) between iterations: past the soft token
+  // limit once its prompt cache has gone cold, past the hard one or the other limits always.
+  sessionMaxTokens: Number(process.env.SESSION_MAX_TOKENS || 150_000),
+  sessionHardTokens: Number(process.env.SESSION_HARD_TOKENS || 500_000),
+  sessionCacheMinutes: Number(process.env.SESSION_CACHE_MINUTES || 60),
   sessionMaxTurns: Number(process.env.SESSION_MAX_TURNS || 40),
   sessionIdleHours: Number(process.env.SESSION_IDLE_HOURS || 12),
 };

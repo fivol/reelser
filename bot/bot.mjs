@@ -509,7 +509,7 @@ setInterval(() => {
 // Each project keeps its own handoff, so coming back to it picks up where it was left.
 const handoffFile = () => join(studio(), 'handoff.md');
 const projectPath = (slug = state.project) => relative(ROOT, join(PROJECTS, slug)).split('\\').join('/');
-const preamble = () => `You are running as the reels Telegram bot. Follow AGENTS.md and REELS.md; before your first reply read REELS.md, the project's brief.md and PLAYBOOK.md. Talk to the owner through your final reply and \`node bot/send.mjs\`; name each stage of your work with \`node bot/send.mjs --status "<emoji> <stage>"\` (e.g. «💡 Придумываю идеи», «🎬 Монтирую v2»). The active project is \`${projectPath()}/\` (\`<project>/\` in REELS.md), ${projectName(state.project) ? `named «${projectName(state.project)}»` : 'not named yet'}.`;
+const preamble = () => `You are running as the reels Telegram bot. Follow AGENTS.md and REELS.md; before your first reply read REELS.md, the project's brief.md and PLAYBOOK.md, and the README of the reel the handoff names as active. Talk to the owner through your final reply and \`node bot/send.mjs\`; name each stage of your work with \`node bot/send.mjs --status "<emoji> <stage>"\` (e.g. «💡 Придумываю идеи», «🎬 Монтирую v2»). The active project is \`${projectPath()}/\` (\`<project>/\` in REELS.md), ${projectName(state.project) ? `named «${projectName(state.project)}»` : 'not named yet'}.`;
 const handoffPrompt = () => `This session is about to be closed. First put everything worth keeping into the files in ${projectPath()}/: reel details, decisions and build notes into that reel's README.md, rules and lessons into PLAYBOOK.md, ideas into ideas.md. Then write ${projectPath()}/handoff.md, only the live state the files do not show: which reel is active (its README path), what was sent last, the question the owner has not answered yet (with its buttons). No reel history, no notes that belong in a file. At most 15 lines. Reply with one word: done.`;
 
 // The agent's instructions; a session that read an older version starts over.
@@ -528,10 +528,14 @@ function instructionsHash() {
 function rotationDue() {
   if (!state.sessionId) return false;
   if (state.rotate || state.instructions !== instructionsHash()) return true;
-  const idleHours = (Date.now() - (state.lastTurnAt ?? 0)) / 3_600_000;
-  return (state.sessionContext ?? 0) > env.sessionMaxTokens
+  const idleMinutes = (Date.now() - (state.lastTurnAt ?? 0)) / 60_000;
+  const context = state.sessionContext ?? 0;
+  // A big session stays while its cache is warm: the owner's next edit usually comes
+  // within minutes and continues the same iteration with everything still in mind.
+  return context > env.sessionHardTokens
+    || (context > env.sessionMaxTokens && idleMinutes > env.sessionCacheMinutes)
     || (state.sessionTurns ?? 0) >= env.sessionMaxTurns
-    || idleHours > env.sessionIdleHours;
+    || idleMinutes > env.sessionIdleHours * 60;
 }
 
 function openingPrompt(prompt) {
@@ -715,8 +719,8 @@ async function onAgentError(res, prompt, retried) {
   await tg.sendText(state.chatId, e.text, {reply_markup: replyKeyboard([e.retry], {retry: prompt, retryLabel: e.retry})});
 }
 
-// Rotate a session that grew too big or too long while idle, right after a task, so
-// the next message does not have to wait for the handoff.
+// Rotate a due session while idle (right after a task, or once its cache has gone
+// cold), so the next message does not have to wait for the handoff.
 async function rotateIfDue() {
   if (current || queue.length || !rotationDue()) return;
   // At most every 10 minutes: a stopped handoff must not start over in a loop.
@@ -727,8 +731,8 @@ async function rotateIfDue() {
   await rotate({quiet: true}).catch((e) => console.error('rotate', e));
   drain();
 }
-// Stale sessions too: checked hourly, so they rotate before the owner writes.
-setInterval(() => rotateIfDue(), 3_600_000);
+// Checked every 10 minutes, so a big session rotates soon after its cache goes cold.
+setInterval(() => rotateIfDue(), 10 * 60_000);
 
 async function drain() {
   while (!current && (queue.length || state.switchTo)) {
