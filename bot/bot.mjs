@@ -69,6 +69,10 @@ const T = {
     updateCheckFailed: (e) => `⚠️ Не смог проверить обновления: ${e}`,
     backedUp: (dir) => `твои правки в файлах бота сохранены в ${dir}`,
     ideasPrompt: 'Пачка идей для рилсов: раздел «1. Ideas» в REELS.md.',
+    ideasNudge: '💡 Идеи с прошлого раза ещё ждут. Прислать свежие?\n\nИли просто напиши, что хочешь: свою идею, правку к рилсу, вопрос — я на связи.',
+    ideasFresh: '🎲 Прислать новые',
+    ideasStop: '🔕 Не напоминать',
+    ideasPaused: '🔕 Больше не присылаю идеи по расписанию. Пачка в любой момент — /ideas, вернуть расписание — /settings или просто попроси.',
     morePrompt: '(tapped «🎲 Другие идеи»: pitch a fresh batch of 4 NEW ideas per «1. Ideas» in REELS.md — none of the ones already shown; those stay in ideas.md. Keyboard: only the new ones, via --ideas.)',
     projects: '📁 **Проекты**\n\nУ каждого проекта свои бриф, идеи, вкус, музыка и рилсы. Открыт один: всё, что ты пишешь, идёт в него.',
     newProject: '➕ Новый проект',
@@ -116,6 +120,10 @@ const T = {
     updateCheckFailed: (e) => `⚠️ Could not check for updates: ${e}`,
     backedUp: (dir) => `your edits to the bot's files are saved in ${dir}`,
     ideasPrompt: 'A batch of reel ideas: section "1. Ideas" in REELS.md.',
+    ideasNudge: '💡 The ideas from last time are still waiting. Send fresh ones?\n\nOr just tell me what you want: your own idea, an edit, a question — I am here.',
+    ideasFresh: '🎲 Send new ones',
+    ideasStop: '🔕 Stop reminding',
+    ideasPaused: '🔕 No more scheduled ideas. A batch any time: /ideas; the schedule comes back in /settings or when you ask.',
     morePrompt: '(tapped «🎲 More ideas»: pitch a fresh batch of 4 NEW ideas per «1. Ideas» in REELS.md — none of the ones already shown; those stay in ideas.md. Keyboard: only the new ones, via --ideas.)',
     projects: '📁 **Projects**\n\nEach project has its own brief, ideas, taste, music and reels. One is open: everything you write goes to it.',
     newProject: '➕ New project',
@@ -856,6 +864,7 @@ async function onMessage(msg) {
     return tg.sendText(msg.chat.id, T.confirmOnComputer);
   }
   if (msg.from.id !== state.ownerId) return tg.sendText(msg.chat.id, T.private, {silent: true}).catch(() => {});
+  ownerSeen();
 
   const cmd = msg.text?.match(/^\/(\w+)/)?.[1];
   if (cmd === 'start') return tg.sendText(state.chatId, T.hello, {silent: true});
@@ -921,6 +930,10 @@ async function onMessage(msg) {
   if (msg.text && keys?.labels?.includes(msg.text)) {
     if (keys.retry && msg.text === keys.retryLabel) return enqueue(keys.retry);
     if (keys.more && msg.text === keys.more) return enqueue(T.morePrompt);
+    if (keys.pause && msg.text === keys.pause) {
+      await clearKeyboard();
+      return pauseIdeas();
+    }
     if (msg.text === keys.tune && keys.menu) {
       await clearKeyboard();
       const result = await onMenuButton(tg, state.chatId, `m:${keys.menu}:open`);
@@ -962,6 +975,12 @@ function flushBatch() {
 async function onButton(q) {
   await tg.call('answerCallbackQuery', {callback_query_id: q.id}).catch(() => {});
   if (q.from.id !== state.ownerId || q.data === 'ctl:done') return;
+  ownerSeen();
+  if (q.data === 'ideas:new' || q.data === 'ideas:off') {
+    tg.call('editMessageReplyMarkup', {chat_id: state.chatId, message_id: q.message.message_id, reply_markup: {inline_keyboard: []}}).catch(() => {});
+  }
+  if (q.data === 'ideas:new') return enqueue(T.ideasPrompt);
+  if (q.data === 'ideas:off') return pauseIdeas();
   if (q.data.startsWith('set:')) return onSettings(q);
   if (q.data.startsWith('p:')) return onProjectButton(q);
   if (q.data.startsWith('px:')) return onCrossButton(q);
@@ -1007,18 +1026,53 @@ async function onButton(q) {
 
 // ---------- daily ideas ----------
 
-setInterval(() => {
+//
+// Never pushy. A batch comes at the set time only when the owner is not busy with the
+// bot right now. If the last scheduled batch got no answer at all, no new batch is
+// made: a short silent reminder comes instead, 2, 4, 8… days apart (at most 32), with
+// «send new ones» and «stop reminding». Any message or tap from the owner resets it.
+
+const DAY = 86_400_000;
+
+/** Any message or tap from the owner: scheduled ideas are answered. */
+function ownerSeen() {
+  state.lastOwnerAt = Date.now();
+  if (state.ideasWaiting) delete state.ideasWaiting;
+}
+
+function pauseIdeas() {
+  const s = settings();
+  writeSettings({ideasAt: '', ideasAtBefore: s.ideasAt || '10:00'});
+  delete state.ideasWaiting;
+  saveState(state);
+  return tg.sendText(state.chatId, T.ideasPaused, {silent: true}).catch(() => {});
+}
+
+setInterval(async () => {
   const s = settings();
   const {ideasAt = '10:00'} = s;
   const now = new Date();
   if (!ideasAt || !state.ownerId || !ideasDay(s, now)) return;
   const day = now.toLocaleDateString('sv');
   const hhmm = now.toTimeString().slice(0, 5);
-  if (hhmm >= ideasAt && state.lastIdeasDay !== day) {
-    state.lastIdeasDay = day;
+  if (hhmm < ideasAt || state.lastIdeasDay === day) return;
+  // Busy right now (a task runs, or the owner wrote in the last hour): later today.
+  if (current || queue.length || Date.now() - (state.lastOwnerAt ?? 0) < 3_600_000) return;
+  state.lastIdeasDay = day;
+  const waiting = state.ideasWaiting?.project === state.project ? state.ideasWaiting : null;
+  if (!waiting) {
+    state.ideasWaiting = {project: state.project, at: Date.now(), nudges: 0};
     saveState(state);
-    enqueue(T.ideasPrompt);
+    return enqueue(T.ideasPrompt);
   }
+  const gap = Math.min(2 ** (waiting.nudges + 1), 32) * DAY;
+  if (Date.now() - waiting.at < gap - DAY / 2) return saveState(state);
+  Object.assign(waiting, {at: Date.now(), nudges: waiting.nudges + 1});
+  saveState(state);
+  await tg.sendText(state.chatId, T.ideasNudge, {
+    silent: true,
+    reply_markup: {inline_keyboard: [[{text: T.ideasFresh, callback_data: 'ideas:new'}, {text: T.ideasStop, callback_data: 'ideas:off'}]]},
+  }).catch(() => {});
 }, 60_000);
 
 // ---------- updates ----------

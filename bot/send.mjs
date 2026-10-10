@@ -16,9 +16,9 @@
 import {readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {parseArgs} from 'node:util';
-import {DATA, env, loadState} from './config.mjs';
+import {DATA, env, loadState, settings} from './config.mjs';
 import {createMenu, customHint, deferMenu, tuneLabel} from './menu.mjs';
-import {moreIdeasLabel, replyKeyboard} from './keys.mjs';
+import {moreIdeasLabel, pauseIdeasLabel, replyKeyboard} from './keys.mjs';
 import {keyboard, telegram} from './telegram.mjs';
 
 const {values: o} = parseArgs({
@@ -60,8 +60,10 @@ if (o.text) {
     if (menuId) keys.push(tuneLabel());
     // A batch of ideas always ends with «More ideas», whatever the agent passed.
     const more = o.ideas ? moreIdeasLabel() : undefined;
-    if (more) keys.splice(0, keys.length, ...keys.filter((k) => !/^🎲/.test(k)), more);
-    markup = replyKeyboard(keys, {menu: menuId, tune: tuneLabel(), more, placeholder: customHint().replace(/^✍️\s*/, '')});
+    // While daily ideas are on, the owner can pause them right there.
+    const pause = more && settings().ideasAt !== '' ? pauseIdeasLabel() : undefined;
+    if (more) keys.splice(0, keys.length, ...keys.filter((k) => !/^[🎲🔕]/u.test(k)), more, ...(pause ? [pause] : []));
+    markup = replyKeyboard(keys, {menu: menuId, tune: tuneLabel(), more, pause, placeholder: customHint().replace(/^✍️\s*/, '')});
   } else if (buttons || menuId) {
     markup = keyboard(buttons ?? []);
     if (menuId) markup.inline_keyboard.push([{text: tuneLabel(), callback_data: `m:${menuId}:open`}]);
