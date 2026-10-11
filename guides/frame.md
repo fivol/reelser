@@ -15,8 +15,9 @@ grid crop    the profile grid shows the middle 3:4: y 240–1680
 ```
 
 - Text, buttons the viewer must notice and faces stay inside x 60–850 (up to 1020 above y ≈ 900), y 250–1440.
-- Backgrounds, footage and decoration can fill the whole frame.
-- Before rendering, check the stills against this box.
+- That includes whatever is read inside a phone mockup, screen recording or app screenshot: chat bubbles, a tapped button, the list being shown. Only what is not read (backgrounds, decoration, the idle parts of a screen) may fill the whole frame.
+- A phone mockup puts the action near its edges (chat bubbles and the input at the bottom, headers at the top). Move the phone or the camera so the active part sits mid-frame, even if the phone then runs off the top or bottom.
+- Check every still with `node scripts/zones.mjs <still.png>…`: it writes `<still>-zones.png` with the covered zones in red and the grid crop in yellow. Anything to be read in the red is a bug.
 
 ## Cover
 
