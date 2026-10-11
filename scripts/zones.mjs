@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Marks the zones the app covers (guides/frame.md) on 1080×1920 stills, so a check is
-// not by eye: anything to be read must stay out of the red.
+// not by eye: the point of attention must stay out of the red.
 // Usage: node scripts/zones.mjs <still.png>… → writes <still>-zones.png next to each.
 import {spawnSync} from 'node:child_process';
 import {ffCommand} from '../bot/media.mjs';

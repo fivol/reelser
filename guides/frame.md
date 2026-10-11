@@ -7,17 +7,17 @@ Defaults for a 1080×1920 reel. `<project>/PLAYBOOK.md` and the owner's words wi
 The app draws over the edges of every reel, and the profile grid crops it.
 
 ```
-y 0–250      top: status bar, «Reels» header, camera button        → no text
-y 250–1440   safe for text and anything that must be read
-y 1440–1920  bottom: username, caption, audio strip               → no text
-x 850–1080   right: like / comment / share rail (from y ≈ 900 down) → no text
+y 0–250      top: status bar, «Reels» header, camera button
+y 250–1440   safe: where the attention goes
+y 1440–1920  bottom: username, caption, audio strip
+x 850–1080   right: like / comment / share rail (from y ≈ 900 down)
 grid crop    the profile grid shows the middle 3:4: y 240–1680
 ```
 
-- Text, buttons the viewer must notice and faces stay inside x 60–850 (up to 1020 above y ≈ 900), y 250–1440.
-- That includes whatever is read inside a phone mockup, screen recording or app screenshot: chat bubbles, a tapped button, the list being shown. Only what is not read (backgrounds, decoration, the idle parts of a screen) may fill the whole frame.
-- A phone mockup puts the action near its edges (chat bubbles and the input at the bottom, headers at the top). Move the phone or the camera so the active part sits mid-frame, even if the phone then runs off the top or bottom.
-- Check every still with `node scripts/zones.mjs <still.png>…`: it writes `<still>-zones.png` with the covered zones in red and the grid crop in yellow. Anything to be read in the red is a bug.
+- The rule is about attention, not about every pixel. Whatever the viewer should look at right now stays inside x 60–850 (up to 1020 above y ≈ 900), y 250–1440: the caption or headline, the message that just arrived, the button being tapped, the part of a screen being shown, a speaking face.
+- Everything else may run into the covered zones: backgrounds, pictures, parts of a phone or a screen, older messages, context around the action.
+- A phone mockup puts the action near its edges (new chat bubbles and the input at the bottom, headers at the top). Move the phone or the camera so the active part sits mid-frame, even if the phone then runs off the top or bottom.
+- Check every still with `node scripts/zones.mjs <still.png>…`: it writes `<still>-zones.png` with the covered zones in red and the grid crop in yellow. The point of attention in the red is a bug; anything else there is fine.
 
 ## Cover
 
