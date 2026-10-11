@@ -1,7 +1,7 @@
 import {Config} from '@remotion/cli/config';
 
 Config.setCodec('h264');
-Config.setCrf(18);
+// No setCrf: 18 is already the h264 default, and a global CRF breaks audio-only renders (--codec=wav).
 Config.setPixelFormat('yuv420p');
 Config.setVideoImageFormat('jpeg');
 Config.setOverwriteOutput(true);

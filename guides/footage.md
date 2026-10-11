@@ -23,5 +23,6 @@ For reels with the owner's own recordings: talking to camera, voice-over, filmed
 
 ## Footage as material
 
+- Before a clip goes into Remotion, cut it to the part you use and conform it with ffmpeg (1080×1920, 30 fps, `-g 30` so seeking is cheap): Remotion decodes every frame it shows, and long or variable-frame-rate clips make renders slow.
 - Look at a few frames of every clip before using it (`node scripts/ffmpeg.mjs -i <file> -vf fps=1 <dir>/f%02d.png`).
 - Check reused footage for demo text or personal data before putting it in a new reel.

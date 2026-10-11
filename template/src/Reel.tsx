@@ -30,8 +30,9 @@ const Backdrop = () => {
 /** One headline per scene; enters fast, leaves on the cut. */
 const Title = ({title, note}: {title: string; note: string}) => {
   const f = useCurrentFrame();
-  const inP = interpolate(f, [0, 18], [0, 1], {...clamp, easing: ease});
-  const noteP = interpolate(f, [10, 30], [0, 1], {...clamp, easing: ease});
+  const {fps} = useVideoConfig();
+  const inP = interpolate(f, [0, 0.3 * fps], [0, 1], {...clamp, easing: ease});
+  const noteP = interpolate(f, [0.17 * fps, 0.5 * fps], [0, 1], {...clamp, easing: ease});
   return (
     <AbsoluteFill style={{justifyContent: 'center', padding: 90, top: 260, fontFamily}}>
       <div style={{color: t.ink, fontSize: 104, fontWeight: 700, lineHeight: 1.05, letterSpacing: -2, opacity: inP, transform: `translateY(${(1 - inP) * 60}px)`}}>

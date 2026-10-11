@@ -1,6 +1,7 @@
 // The whole reel as data: edit this file first, the components follow it.
 export const story = {
-  fps: 60,
+  // 30 fps: what Reels plays, and half the frames of 60 to render. Time animations in seconds × fps, never in raw frames.
+  fps: 30,
   // Seconds per bar of the track (60 / bpm * 4); scenes are measured in bars.
   barSeconds: 2,
   // File in public/, or null for silence.
