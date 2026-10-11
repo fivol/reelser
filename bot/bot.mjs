@@ -395,8 +395,9 @@ async function switchProject() {
   state.project = req.slug;
   saveState(state);
   const text = req.created ? `${T.projectNew(projectName(req.slug), fromName)}${req.carry ? '' : `\n\n${T.askAbout}`}` : T.projectOpen(nameOf(req.slug));
-  // The divider takes the old keyboard away too.
-  const msg = await tg.call('sendMessage', {chat_id: state.chatId, text, reply_markup: {remove_keyboard: true}}).catch(() => null);
+  // The divider takes the old keyboard away too. It is quiet unless it asks about the new project.
+  const asks = req.created && !req.carry;
+  const msg = await tg.call('sendMessage', {chat_id: state.chatId, text, disable_notification: !asks, reply_markup: {remove_keyboard: true}}).catch(() => null);
   if (msg) {
     await dropKeyAck();
     state.projectLog = [...(state.projectLog ?? []), [msg.message_id, req.slug]].slice(-200);
@@ -1146,7 +1147,9 @@ async function checkUpdates(asked = false) {
     if (subjects.length && upstream && (asked || state.updateOffered !== upstream)) {
       state.updateOffered = upstream;
       saveState(state);
+      // An offer that holds nothing up: it arrives quietly.
       await tg.sendText(state.chatId, T.updateAvailable(subjects.slice(0, 10), await remoteUrl()), {
+        silent: true,
         reply_markup: {inline_keyboard: [[{text: T.updateYes, callback_data: 'upd:yes'}, {text: T.updateNo, callback_data: 'upd:no'}]]},
       });
     }
