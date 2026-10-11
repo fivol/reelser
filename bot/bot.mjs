@@ -210,8 +210,14 @@ const mtime = (f) => (existsSync(f) ? statSync(f).mtimeMs : 0);
 // the removal (it can't ride on the progress message, which has inline buttons). It stays
 // until a later message takes over the keyboard: deleting it right away brings the old
 // keyboard back in Telegram clients, which show the last keyboard still in the chat.
-async function clearKeyboard() {
-  if (!forgetKeys()) return;
+// The progress line waits for it, so the line stays the last message.
+let clearingKeys = Promise.resolve();
+function clearKeyboard() {
+  if (forgetKeys()) clearingKeys = clearingKeys.then(sendKeyAck, sendKeyAck);
+  return clearingKeys;
+}
+
+async function sendKeyAck() {
   const msg = await tg.call('sendMessage', {chat_id: state.chatId, text: T.keysGone, disable_notification: true, reply_markup: {remove_keyboard: true}}).catch(() => null);
   if (!msg) return;
   await dropKeyAck();
@@ -448,6 +454,7 @@ function controls() {
 // The progress message id is persisted, so one left behind by a crash or restart
 // is removed on the next start. Result messages are never deleted.
 async function postStatus(text) {
+  await clearingKeys.catch(() => {});
   const msg = await tg.call('sendMessage', {chat_id: state.chatId, text, disable_notification: true, reply_markup: controls()}, {retries: 0});
   current.statusId = state.statusId = msg.message_id;
   current.lastText = text;
