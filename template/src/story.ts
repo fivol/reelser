@@ -1,7 +1,10 @@
 // The whole reel as data: edit this file first, the components follow it.
+import {getInputProps} from 'remotion';
+
 export const story = {
-  // 30 fps: what Reels plays, and half the frames of 60 to render. Time animations in seconds × fps, never in raw frames.
-  fps: 30,
+  // 30 fps for drafts: half the frames of 60 to render. The final is rendered at 60 (`render.mjs --fps=60`),
+  // so time everything in seconds × fps, never in raw frames.
+  fps: Number(getInputProps().fps ?? 30),
   // Seconds per bar of the track (60 / bpm * 4); scenes are measured in bars.
   barSeconds: 2,
   // File in public/, or null for silence.

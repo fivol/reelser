@@ -5,6 +5,7 @@
 //        render in the foreground (short reels)
 //   node scripts/render.mjs <project> <out.mp4> [label] --background [-- …]
 //        start in the background and print a job id at once
+//   --fps=60 renders at that frame rate instead of the project's draft rate (the final)
 //   node scripts/render.mjs --wait <job> [seconds=540]
 //        wait for that job, at most `seconds`; exit 0 done, 2 still running, 1 failed,
 //        3 the owner wrote meanwhile (the job keeps running)
@@ -76,9 +77,12 @@ const extra = dash >= 0 ? argv.slice(dash + 1) : [];
 const own = dash >= 0 ? argv.slice(0, dash) : argv;
 const background = own.includes('--background');
 const jobArg = own.find((a) => a.startsWith('--job='))?.slice(6);
+// The template reads its frame rate from the input props (src/story.ts).
+const fps = own.find((a) => a.startsWith('--fps='))?.slice(6);
+if (fps) extra.push(`--props=${JSON.stringify({fps: Number(fps)})}`);
 const [projectArg, outArg, label = '🎬 Рендер'] = own.filter((a) => !a.startsWith('--'));
 if (!projectArg || !outArg) {
-  console.error('Usage: node scripts/render.mjs <project-dir> <out.mp4> [label] [--background] [-- extra remotion args]');
+  console.error('Usage: node scripts/render.mjs <project-dir> <out.mp4> [label] [--background] [--fps=60] [-- extra remotion args]');
   process.exit(1);
 }
 const project = resolve(projectArg);
