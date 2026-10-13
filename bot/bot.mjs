@@ -97,10 +97,10 @@ const T = {
     share: '👥 Поделиться',
     sharePick: '👥 **Поделиться проектом**\n\nВыбери проект — дам ссылку, перешли её человеку. Он увидит только свои проекты (и сможет заводить новые), а ты — все. Твои задачи идут первыми.',
     shareNew: '➕ Новый проект для гостя',
-    inviteLink: (name, link) => `🔗 Приглашение в «${name}»:\n${link}\n\nПерешли эту ссылку тому, с кем делишься. Она одноразовая и действует 7 дней. Гости и доступ: /people`,
+    inviteLink: (name, link) => `🔗 ${name ? `Приглашение в «${name}»` : 'Приглашение: у гостя будет свой новый проект'}:\n${link}\n\nПерешли эту ссылку тому, с кем делишься. Она одноразовая и действует 7 дней. Гости и доступ: /people`,
     ownInvite: 'Это приглашение для другого человека — перешли ему ссылку.',
     inviteBad: 'Это приглашение уже использовано или устарело. Попроси новое.',
-    guestJoined: (who, name) => `👤 ${who} открывает проект «${name}» по твоему приглашению. Гости и доступ: /people`,
+    guestJoined: (who, name) => `👤 ${who} ${name ? `открывает проект «${name}»` : 'открывает бота'} по твоему приглашению. Гости и доступ: /people`,
     people: '👥 **Гости**\n\nС кем ты делишься проектами. Гость видит только свои проекты, ты — все (/projects). Твои задачи идут первыми.',
     noPeople: 'Ты пока ни с кем не делишься. Поделиться проектом: /projects → 👥 Поделиться.',
     guestView: (g, projects) => `👤 **${g.name}**${g.username ? ` (@${g.username})` : ''}\n\n📁 ${projects.length ? projects.map((p) => `«${p}»`).join(', ') : 'проектов нет'}\n🔢 До ${g.turnsPerDay} задач в день`,
@@ -109,8 +109,9 @@ const T = {
     revokeBtn: '⛔ Закрыть доступ',
     back: '⬅️ Назад',
     revoked: (who) => `⛔ ${who}: доступ закрыт. Проекты остались у тебя.`,
-    helloGuest: (owner, name, fresh) => `🎬 Привет! Это бот для рилсов${owner ? `, ${owner} открывает тебе к нему доступ` : ''}. Я присылаю идеи, монтирую выбранные, правлю по твоим ответам на видео.\n\n📁 Твой проект — «${name}». Видны только твои проекты, новые можно заводить: /projects\n\n🎙 Можно говорить голосовыми, а пока я работаю — дописывать и поправлять.\n\n${fresh ? 'Для начала расскажи, о чём будут рилсы: продукт, ссылка, аудитория.' : 'Напиши, что сделать, или /ideas — свежие идеи.'}`,
-    guestAdded: (name) => `📁 Тебе открыли ещё один проект — «${name}». Перейти: /projects`,
+    accessOpen: (owner) => `✅ ${owner ? `${owner} открывает тебе доступ к боту` : 'Тебе открыли доступ к боту'}.`,
+    helloShared: (owner, name, fresh) => `🎬 Привет! Это бот для рилсов${owner ? `, ${owner} открывает тебе к нему доступ` : ''}. Я присылаю идеи, монтирую выбранные, правлю по твоим ответам на видео.\n\n📁 Тебе открыт проект «${name}». Новые можно заводить: /projects\n\n🎙 Можно говорить голосовыми, а пока я работаю — дописывать и поправлять.\n\n${fresh ? 'Для начала расскажи, о чём будут рилсы: продукт, ссылка, аудитория.' : 'Напиши, что сделать, или /ideas — свежие идеи.'}`,
+    guestAdded: (name) => (name ? `📁 Тебе открыли ещё один проект — «${name}». Перейти: /projects` : '📁 Тебе открыли ещё один проект, пока пустой. Перейти и рассказать, о чём он: /projects'),
     projectGone: (gone, now) => `📁 Проект «${gone}» тебе больше не доступен. Открыт «${now}».`,
     limitReached: (n) => `⏸ На сегодня всё: лимит — ${n} задач в день. Завтра продолжим.`,
     waitOwner: '⏳ Сейчас бот занят задачей владельца — начну сразу после неё.',
@@ -120,7 +121,7 @@ const T = {
     admitNew: '✅ Дать доступ: новый проект',
     admitTo: (name) => `📁 Дать «${name}»`,
     denyBtn: '🚫 Отказать',
-    admitted: (who, name) => `${who} → «${name}»`,
+    admitted: (who, name) => (name ? `${who} → «${name}»` : `${who}: доступ открыт, начнёт с онбординга`),
     deniedLabel: (who) => `${who}: отказано`,
     requestDenied: 'Владелец не открыл тебе доступ к этому боту. Свой можно поставить: github.com/fivol/reels-bot',
   },
@@ -179,10 +180,10 @@ const T = {
     share: '👥 Share',
     sharePick: '👥 **Share a project**\n\nPick a project and I give you a link to forward. The person sees only their projects (and can start new ones); you see all of them. Your tasks go first.',
     shareNew: '➕ New project for a guest',
-    inviteLink: (name, link) => `🔗 Invite to «${name}»:\n${link}\n\nForward this link to the person you share with. It works once and for 7 days. Guests and access: /people`,
+    inviteLink: (name, link) => `🔗 ${name ? `Invite to «${name}»` : 'Invite: the guest gets a new project of their own'}:\n${link}\n\nForward this link to the person you share with. It works once and for 7 days. Guests and access: /people`,
     ownInvite: 'This is an invite for someone else: forward them the link.',
     inviteBad: 'This invite is used up or expired. Ask for a new one.',
-    guestJoined: (who, name) => `👤 ${who} opened your invite to «${name}». Guests and access: /people`,
+    guestJoined: (who, name) => `👤 ${who} opened your invite${name ? ` to «${name}»` : ''}. Guests and access: /people`,
     people: '👥 **Guests**\n\nWho you share projects with. A guest sees only their projects, you see all (/projects). Your tasks go first.',
     noPeople: 'You do not share with anyone yet. Share a project: /projects → 👥 Share.',
     guestView: (g, projects) => `👤 **${g.name}**${g.username ? ` (@${g.username})` : ''}\n\n📁 ${projects.length ? projects.map((p) => `«${p}»`).join(', ') : 'no projects'}\n🔢 Up to ${g.turnsPerDay} tasks a day`,
@@ -191,8 +192,9 @@ const T = {
     revokeBtn: '⛔ Close access',
     back: '⬅️ Back',
     revoked: (who) => `⛔ ${who}: access closed. The projects stay with you.`,
-    helloGuest: (owner, name, fresh) => `🎬 Hi! This is a reels bot${owner ? ` ${owner} shares with you` : ''}. I pitch ideas, edit the ones you pick and revise them from your replies to the video.\n\n📁 Your project is «${name}». You see only your projects and can start new ones: /projects\n\n🎙 Voice messages work, and while I work you can keep writing and correcting.\n\n${fresh ? 'First tell me what the reels are about: product, link, audience.' : 'Tell me what to do, or /ideas for fresh ideas.'}`,
-    guestAdded: (name) => `📁 One more project is open to you: «${name}». Go there: /projects`,
+    accessOpen: (owner) => `✅ ${owner ? `${owner} gives you access to this bot` : 'You have access to this bot now'}.`,
+    helloShared: (owner, name, fresh) => `🎬 Hi! This is a reels bot${owner ? ` ${owner} shares with you` : ''}. I pitch ideas, edit the ones you pick and revise them from your replies to the video.\n\n📁 The project «${name}» is open to you. You can start new ones: /projects\n\n🎙 Voice messages work, and while I work you can keep writing and correcting.\n\n${fresh ? 'First tell me what the reels are about: product, link, audience.' : 'Tell me what to do, or /ideas for fresh ideas.'}`,
+    guestAdded: (name) => (name ? `📁 One more project is open to you: «${name}». Go there: /projects` : '📁 One more project is open to you, still empty. Go there and tell me what it is about: /projects'),
     projectGone: (gone, now) => `📁 The project «${gone}» is no longer open to you. Now open: «${now}».`,
     limitReached: (n) => `⏸ That is all for today: the limit is ${n} tasks a day. More tomorrow.`,
     waitOwner: '⏳ The bot is busy with its owner\'s task right now; I start right after it.',
@@ -202,7 +204,7 @@ const T = {
     admitNew: '✅ Give access: a new project',
     admitTo: (name) => `📁 Give «${name}»`,
     denyBtn: '🚫 Say no',
-    admitted: (who, name) => `${who} → «${name}»`,
+    admitted: (who, name) => (name ? `${who} → «${name}»` : `${who}: access open, starts with onboarding`),
     deniedLabel: (who) => `${who}: declined`,
     requestDenied: 'The owner did not open this bot to you. Get your own: github.com/fivol/reels-bot',
   },
@@ -296,6 +298,16 @@ function ownerBusy() {
     return false;
   }
 }
+// A project shared before anyone started it has no name ('') until its onboarding gives one.
+const sharedName = (slug) => projectName(slug) || (untouched(slug) ? '' : nameOf(slug));
+
+// A guest with a project of their own still to start gets the owner's onboarding as is:
+// the agent names the project from it. A shared project is named in the greeting.
+function guestHello() {
+  const name = sharedName(state.project);
+  return name ? T.helloShared(ownerName(), name, untouched(state.project)) : `${T.accessOpen(ownerName())}\n\n${T.hello}`;
+}
+
 function ownerName() {
   if (!GUEST) return state.ownerName;
   try {
@@ -576,7 +588,7 @@ async function onShareButton(q) {
   const slug = arg === '+' ? createProject('') : arg;
   if (!projectExists(slug)) return markChosen(q, null);
   await markChosen(q, arg === '+' ? T.shareNew.replace(/^\S+\s/, '') : nameOf(slug));
-  await tg.sendText(state.chatId, T.inviteLink(nameOf(slug), await inviteLink(slug)), {silent: true});
+  await tg.sendText(state.chatId, T.inviteLink(sharedName(slug), await inviteLink(slug)), {silent: true});
 }
 
 const personName = (from) => [from.first_name, from.last_name].filter(Boolean).join(' ') || from.username || String(from.id);
@@ -584,7 +596,7 @@ const personName = (from) => [from.first_name, from.last_name].filter(Boolean).j
 // A new guest's bot starts and greets them; one who was a guest already gets one line.
 async function welcomeGuest({id, chatId, name}, {slug, isNew}, msg) {
   console.log(`guest ${id} joined with ${slug}`);
-  if (!isNew) return tg.sendText(chatId, T.guestAdded(nameOf(slug)));
+  if (!isNew) return tg.sendText(chatId, T.guestAdded(sharedName(slug)));
   seedGuest(id, {chatId, name, slug});
   await guestCommands(tg, chatId, LANG).catch((e) => console.error('guest commands', e.message));
   forward(id, {message: msg ?? {message_id: 0, from: {id: Number(id), first_name: name}, chat: {id: chatId, type: 'private'}, date: Math.floor(Date.now() / 1000), text: '/start'}});
@@ -596,7 +608,7 @@ async function joinByInvite(msg, code) {
   const r = redeemInvite(code, who);
   if (!r || !projectExists(r.slug)) return tg.sendText(msg.chat.id, T.inviteBad);
   await welcomeGuest(who, r, msg);
-  await tg.sendText(state.chatId, T.guestJoined(who.name, nameOf(r.slug)), {silent: true}).catch(() => {});
+  await tg.sendText(state.chatId, T.guestJoined(who.name, sharedName(r.slug)), {silent: true}).catch(() => {});
 }
 
 // Someone opened the bot without an invite (e.g. its link was simply passed on): the
@@ -629,7 +641,7 @@ async function onRequestButton(q) {
   if (!projectExists(slug)) return markChosen(q, null);
   const done = answerRequest(id, slug);
   if (!done) return markChosen(q, null);
-  await markChosen(q, T.admitted(r.name, nameOf(slug)));
+  await markChosen(q, T.admitted(r.name, sharedName(slug)));
   await welcomeGuest({id, chatId: r.chatId, name: r.name}, done);
 }
 
@@ -1203,7 +1215,7 @@ async function onMessage(msg) {
   ownerSeen();
 
   const cmd = msg.text?.match(/^\/(\w+)/)?.[1];
-  if (cmd === 'start') return tg.sendText(state.chatId, GUEST ? T.helloGuest(ownerName(), nameOf(state.project), untouched(state.project)) : T.hello, {silent: !GUEST, reply_markup: helloMarkup()});
+  if (cmd === 'start') return tg.sendText(state.chatId, GUEST ? guestHello() : T.hello, {silent: !GUEST, reply_markup: helloMarkup()});
   // The machine and the plan are the owner's.
   if (GUEST && ['update', 'usage', 'people'].includes(cmd)) return;
   // A running task's progress line itself turns into «⏹ Stopped».
