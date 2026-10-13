@@ -15,7 +15,7 @@ For reels with the owner's own recordings: talking to camera, voice-over, filmed
 - Pick the best take per line from a Whisper transcript.
 - Trim every take to its speech by audio energy (Whisper word times drift by up to 0.7 s), about 0.1 s between lines: no dead air.
 - Cut side details that only make it longer, even if they are in the owner's script; say what you cut.
-- Word-by-word captions inside the safe zone (frame.md); music as a low bed under the voice.
+- Word-by-word captions inside the safe zone and off the speaker's face (frame.md); music as a low bed under the voice.
 - Full-screen inserts cut hard on the take boundary; a fade shows the previous take for a few frames and reads as a jerk.
 - Logos and end cards get their own full-screen background, not on top of the footage.
 - In the hook, the owner appears in one shot at most; the rest can be graphics.

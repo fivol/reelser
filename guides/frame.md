@@ -36,3 +36,4 @@ grid crop    the profile grid shows the middle 3:4: y 240–1680
 - Text sits next to what it explains. One point of attention at a time: never a caption at the top while the action happens at the bottom.
 - Every line gets time to be read: roughly 0.3 s per word plus 0.5 s, never under 1 s.
 - Talking reels: burn in word-by-word captions; most people watch muted first.
+- Never put text on a face that is on screen and talking (or is what the viewer watches): captions and headlines go above or below it, or beside it. Check the face's box in the stills, per shot, since framing changes between takes.
