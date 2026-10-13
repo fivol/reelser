@@ -1,6 +1,7 @@
 // Sharing: who besides the owner may use the bot, and with which projects.
 // The owner makes a one-time invite link per project; whoever opens it becomes a guest
-// with that project. A guest sees only their projects (shared with them or created by
+// with that project. Someone who just opens the bot without one asks the owner, once,
+// and the owner's yes makes them a guest the same way. A guest sees only their projects (shared with them or created by
 // them); the owner sees everything. Kept in the owner's data/access.json, which only
 // the bot writes: never the agent, never a guest's process except through these calls.
 import {randomBytes} from 'node:crypto';
@@ -12,13 +13,16 @@ const FILE = join(SHARED, 'access.json');
 const INVITE_DAYS = 7;
 export const DEFAULT_TURNS = 30;
 
-/** {invites: {code: {slug, created, expires}}, guests: {id: {name, username, chatId, projects, own, turnsPerDay, revoked, added}}} */
+/**
+ * {invites: {code: {slug, created, expires}}, guests: {id: {name, username, chatId, projects, own, turnsPerDay, revoked, added}},
+ * requests: {id: {name, username, chatId, at, denied?}}}
+ */
 export function loadAccess() {
   try {
     const a = JSON.parse(readFileSync(FILE, 'utf8'));
-    return {invites: a.invites ?? {}, guests: a.guests ?? {}};
+    return {invites: a.invites ?? {}, guests: a.guests ?? {}, requests: a.requests ?? {}};
   } catch {
-    return {invites: {}, guests: {}};
+    return {invites: {}, guests: {}, requests: {}};
   }
 }
 
@@ -83,29 +87,66 @@ export function createInvite(slug) {
   return code;
 }
 
-/**
- * Uses up an invite: the person becomes a guest (again, if they were revoked) with its
- * project. Returns {slug, isNew} or null for an unknown or expired code.
- */
-export function redeemInvite(code, {id, chatId, name, username}) {
+// The person becomes a guest (again, if they were revoked) with the project.
+function addGuest(a, {id, chatId, name, username}, slug) {
+  const key = String(id);
+  const old = a.guests[key];
+  const isNew = !old || old.revoked;
+  delete a.requests[key];
+  a.guests[key] = {
+    name, username, chatId,
+    projects: [...new Set([...(old && !old.revoked ? old.projects : []), slug])],
+    own: old && !old.revoked ? old.own : [],
+    turnsPerDay: old?.turnsPerDay ?? DEFAULT_TURNS,
+    revoked: false,
+    added: old?.added ?? Date.now(),
+  };
+  return {slug, isNew};
+}
+
+/** Uses up an invite. Returns {slug, isNew} or null for an unknown or expired code. */
+export function redeemInvite(code, who) {
   return edit((a) => {
     const inv = a.invites[code];
     delete a.invites[code];
     if (!inv || inv.expires < Date.now()) return null;
-    const key = String(id);
-    const old = a.guests[key];
-    const isNew = !old || old.revoked;
-    a.guests[key] = {
-      name, username, chatId,
-      projects: [...new Set([...(old && !old.revoked ? old.projects : []), inv.slug])],
-      own: old && !old.revoked ? old.own : [],
-      turnsPerDay: old?.turnsPerDay ?? DEFAULT_TURNS,
-      revoked: false,
-      added: old?.added ?? Date.now(),
-    };
-    return {slug: inv.slug, isNew};
+    return addGuest(a, who, inv.slug);
   });
 }
+
+/**
+ * Someone without an invite opened the bot. Returns 'new' (the owner should be asked),
+ * 'pending' (already asked) or 'closed' (the owner said no, or closed their access).
+ */
+export function requestAccess({id, chatId, name, username}) {
+  return edit((a) => {
+    const key = String(id);
+    if (a.guests[key]?.revoked) return 'closed';
+    const r = a.requests[key];
+    if (r) return r.denied ? 'closed' : 'pending';
+    a.requests[key] = {name, username, chatId, at: Date.now()};
+    return 'new';
+  });
+}
+
+/** The owner's answer to a request: a project for a yes (as an invite would), null for a no. */
+export function answerRequest(id, slug) {
+  return edit((a) => {
+    const r = a.requests[String(id)];
+    if (!r || r.denied) return null;
+    if (!slug) {
+      r.denied = true;
+      return null;
+    }
+    return {...addGuest(a, {id, ...r}, slug), who: r};
+  });
+}
+
+/** An open request from this person, or null. */
+export const request = (id) => {
+  const r = loadAccess().requests[String(id)];
+  return r && !r.denied ? r : null;
+};
 
 /** Closes guest `id`'s access; their projects stay with the owner. */
 export function revoke(id) {

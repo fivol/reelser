@@ -10,7 +10,7 @@ import {existsSync, openSync, readFileSync, readdirSync, rmSync, statSync, write
 import {homedir} from 'node:os';
 import {join, relative, sep} from 'node:path';
 import {CHANNEL, DATA, FIRST_PROJECT, GUEST, PROJECTS, ROOT, SHARED, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
-import {DEFAULT_TURNS, activeGuests, canSee, createInvite, cycleLimit, guest, guestsOf, redeemInvite, removable, revoke, ungrant} from './access.mjs';
+import {DEFAULT_TURNS, activeGuests, answerRequest, canSee, createInvite, cycleLimit, guest, guestsOf, redeemInvite, removable, request, requestAccess, revoke, ungrant} from './access.mjs';
 import {forward, seedGuest, startGuests, stopGuest, stopGuests} from './guests.mjs';
 import {createProject, dropRequest, ensureProjects, listProjects, projectAt, projectExists, projectName, removeProject, takeRequest, untouched} from './projects.mjs';
 import {APPROVED as CLAIM_APPROVED, REQUEST as CLAIM_REQUEST} from './claim.mjs';
@@ -114,6 +114,15 @@ const T = {
     projectGone: (gone, now) => `📁 Проект «${gone}» тебе больше не доступен. Открыт «${now}».`,
     limitReached: (n) => `⏸ На сегодня всё: лимит — ${n} задач в день. Завтра продолжим.`,
     waitOwner: '⏳ Сейчас бот занят задачей владельца — начну сразу после неё.',
+    requestSent: '👋 Это личный бот для рилсов. Я спросил владельца, можно ли тебе им пользоваться, — напишу, как только ответит.',
+    requestPending: 'Запрос уже у владельца — напишу, как только ответит.',
+    requestAsk: (name, username) => `👤 ${name}${username ? ` (@${username})` : ''} открыл(а) твоего бота и просит доступ.\n\nГость увидит только свои проекты и сможет заводить новые; ты видишь все, твои задачи идут первыми. Не знаешь, кто это, — откажи.`,
+    admitNew: '✅ Дать доступ: новый проект',
+    admitTo: (name) => `📁 Дать «${name}»`,
+    denyBtn: '🚫 Отказать',
+    admitted: (who, name) => `${who} → «${name}»`,
+    deniedLabel: (who) => `${who}: отказано`,
+    requestDenied: 'Владелец не открыл тебе доступ к этому боту. Свой можно поставить: github.com/fivol/reels-bot',
   },
   en: {
     hello: '🎬 Hi! I make reels: I pitch ideas, edit the ones you pick and revise them from your replies to the video.\n\n🎙 You can talk to me with voice messages, it is often faster: dictate an idea or edits and I will get it.\n\n✍️ While I work you can keep writing and correcting: I take it in at once, no need to wait.\n\nFirst tell me what the reels are about: product, link, audience.',
@@ -187,6 +196,15 @@ const T = {
     projectGone: (gone, now) => `📁 The project «${gone}» is no longer open to you. Now open: «${now}».`,
     limitReached: (n) => `⏸ That is all for today: the limit is ${n} tasks a day. More tomorrow.`,
     waitOwner: '⏳ The bot is busy with its owner\'s task right now; I start right after it.',
+    requestSent: '👋 This is a personal reels bot. I asked its owner whether you may use it and will write as soon as they answer.',
+    requestPending: 'Your request is with the owner; I will write as soon as they answer.',
+    requestAsk: (name, username) => `👤 ${name}${username ? ` (@${username})` : ''} opened your bot and asks for access.\n\nA guest sees only their projects and can start new ones; you see all of them and your tasks go first. If you do not know who this is, say no.`,
+    admitNew: '✅ Give access: a new project',
+    admitTo: (name) => `📁 Give «${name}»`,
+    denyBtn: '🚫 Say no',
+    admitted: (who, name) => `${who} → «${name}»`,
+    deniedLabel: (who) => `${who}: declined`,
+    requestDenied: 'The owner did not open this bot to you. Get your own: github.com/fivol/reels-bot',
   },
 }[LANG];
 
@@ -561,20 +579,58 @@ async function onShareButton(q) {
   await tg.sendText(state.chatId, T.inviteLink(nameOf(slug), await inviteLink(slug)), {silent: true});
 }
 
+const personName = (from) => [from.first_name, from.last_name].filter(Boolean).join(' ') || from.username || String(from.id);
+
+// A new guest's bot starts and greets them; one who was a guest already gets one line.
+async function welcomeGuest({id, chatId, name}, {slug, isNew}, msg) {
+  console.log(`guest ${id} joined with ${slug}`);
+  if (!isNew) return tg.sendText(chatId, T.guestAdded(nameOf(slug)));
+  seedGuest(id, {chatId, name, slug});
+  await guestCommands(tg, chatId, LANG).catch((e) => console.error('guest commands', e.message));
+  forward(id, {message: msg ?? {message_id: 0, from: {id: Number(id), first_name: name}, chat: {id: chatId, type: 'private'}, date: Math.floor(Date.now() / 1000), text: '/start'}});
+}
+
 /** Someone opened t.me/<bot>?start=g_<code>. */
 async function joinByInvite(msg, code) {
-  const name = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || msg.from.username || String(msg.from.id);
-  const r = redeemInvite(code, {id: msg.from.id, chatId: msg.chat.id, name, username: msg.from.username});
+  const who = {id: msg.from.id, chatId: msg.chat.id, name: personName(msg.from), username: msg.from.username};
+  const r = redeemInvite(code, who);
   if (!r || !projectExists(r.slug)) return tg.sendText(msg.chat.id, T.inviteBad);
-  console.log(`guest ${msg.from.id} joined with ${r.slug}`);
-  if (r.isNew) {
-    seedGuest(msg.from.id, {chatId: msg.chat.id, name, slug: r.slug});
-    await guestCommands(tg, msg.chat.id, LANG).catch((e) => console.error('guest commands', e.message));
-    forward(msg.from.id, {message: msg});
-  } else {
-    await tg.sendText(msg.chat.id, T.guestAdded(nameOf(r.slug)));
+  await welcomeGuest(who, r, msg);
+  await tg.sendText(state.chatId, T.guestJoined(who.name, nameOf(r.slug)), {silent: true}).catch(() => {});
+}
+
+// Someone opened the bot without an invite (e.g. its link was simply passed on): the
+// owner is asked once, with a new project or one of theirs to give, or a no.
+async function askOwner(msg) {
+  const who = {id: msg.from.id, chatId: msg.chat.id, name: personName(msg.from), username: msg.from.username};
+  const r = requestAccess(who);
+  if (r === 'closed') return tg.sendText(msg.chat.id, T.private, {silent: true}).catch(() => {});
+  if (r === 'pending') return tg.sendText(msg.chat.id, T.requestPending, {silent: true}).catch(() => {});
+  console.log(`access request from ${who.id}`);
+  await tg.sendText(msg.chat.id, T.requestSent).catch(() => {});
+  const rows = [[{text: T.admitNew, callback_data: `rq:${who.id}:+`}]];
+  for (const p of listProjects().slice(0, 6)) rows.push([{text: T.admitTo(labelOf(p.slug)).slice(0, 60), callback_data: `rq:${who.id}:${p.slug}`}]);
+  rows.push([{text: T.denyBtn, callback_data: `rq:${who.id}:-`}]);
+  await tg.sendText(state.chatId, T.requestAsk(who.name, who.username), {reply_markup: {inline_keyboard: rows}});
+}
+
+async function onRequestButton(q) {
+  const [, id, arg] = q.data.split(':');
+  const r = request(id);
+  if (!r) return markChosen(q, null);
+  if (arg === '-') {
+    answerRequest(id, null);
+    console.log(`access request from ${id}: declined`);
+    await markChosen(q, T.deniedLabel(r.name));
+    return tg.sendText(r.chatId, T.requestDenied).catch(() => {});
   }
-  await tg.sendText(state.chatId, T.guestJoined(name, nameOf(r.slug)), {silent: true}).catch(() => {});
+  // A new project is left for the guest: their onboarding names and fills it.
+  const slug = arg === '+' ? createProject('') : arg;
+  if (!projectExists(slug)) return markChosen(q, null);
+  const done = answerRequest(id, slug);
+  if (!done) return markChosen(q, null);
+  await markChosen(q, T.admitted(r.name, nameOf(slug)));
+  await welcomeGuest({id, chatId: r.chatId, name: r.name}, done);
 }
 
 function peopleView(id) {
@@ -1140,6 +1196,7 @@ async function onMessage(msg) {
   if (msg.from.id !== state.ownerId) {
     if (!GUEST && invite) return joinByInvite(msg, invite);
     if (!GUEST && guest(msg.from.id)) return forward(msg.from.id, {message: msg});
+    if (!GUEST) return askOwner(msg);
     return tg.sendText(msg.chat.id, T.private, {silent: true}).catch(() => {});
   }
   if (invite && !GUEST) return tg.sendText(state.chatId, T.ownInvite, {silent: true});
@@ -1272,6 +1329,7 @@ async function onButton(q) {
   if (q.data.startsWith('px:')) return onCrossButton(q);
   if (!GUEST && q.data.startsWith('sh:')) return onShareButton(q);
   if (!GUEST && /^p[pulk]:/.test(q.data)) return onPeopleButton(q);
+  if (!GUEST && q.data.startsWith('rq:')) return onRequestButton(q);
   if (!GUEST && (q.data === 'upd:yes' || q.data === 'upd:no')) {
     const label = q.data === 'upd:yes' ? T.updateYes : T.updateNo;
     await markChosen(q, label);
