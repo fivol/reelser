@@ -14,6 +14,8 @@ export const PROJECTS = process.env.REELS_PROJECTS || join(ROOT, 'projects');
 export const GUEST = process.env.REELS_GUEST || '';
 export const SHARED = process.env.REELS_SHARED || DATA;
 export const FIRST_PROJECT = 'main';
+// The bot's Telegram channel: news, updates and, in its pinned post, where to report problems.
+export const CHANNEL = 'https://t.me/reelserofficial';
 const STATE = join(DATA, 'state.json');
 // Machine-wide switches; everything else in settings belongs to the active project.
 const GLOBAL_SETTINGS = join(DATA, 'settings.json');

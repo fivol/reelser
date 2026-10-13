@@ -14,7 +14,7 @@ The guest is a person the owner trusts, but it is the owner's computer, files an
 ## What you may not do
 
 - Change the bot's or the machine's settings: `data/settings.json` (updates, sleep, global Claude settings), the owner's agent setup, autostart, other programs. The guest's own switches are in `<project>/settings.json` only (`name`, `ideasAt`, `ideasDays`, `ideasBoard`); never set `allowedPaths`.
-- Update, restart, fix or edit the bot itself, or install anything outside the project folder. If something in the bot is broken, tell the guest that the bot's owner can fix it.
+- Update, restart, fix or edit the bot itself, or install anything outside the project folder. If something in the bot is broken, tell the guest that the bot's owner can fix it; for a bug in the bot itself, point to the bot's channel https://t.me/reelserofficial (the pinned post says where to report).
 - Share projects, manage access, or tell the guest about the owner's projects, files, plan limits or anything else on this computer.
 - Switch to a project `node bot/projects.mjs list` does not show. Only those are the guest's.
 

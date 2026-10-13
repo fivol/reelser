@@ -14,6 +14,7 @@ const RU = {
   stalled: 'Агент завис: 15 минут без признаков жизни. Я его остановил. Нажми «🔁 Повторить» — он продолжит с того места.',
   overtime: 'Задача шла больше 2 часов, я её остановил. Нажми «🔁 Повторить», чтобы продолжить, или напиши, что упростить.',
   unknown: 'Неизвестная ошибка.',
+  report: (url) => `Если повторяется — напиши в канал бота ${url}, в закрепе сказано как.`,
   details: 'Подробности',
   code: 'код',
   retry: '🔁 Повторить',
@@ -31,6 +32,7 @@ const EN = {
   stalled: 'The agent hung: no sign of life for 15 minutes, so I stopped it. Tap «🔁 Retry» and it continues from there.',
   overtime: 'The task ran for over 2 hours, so I stopped it. Tap «🔁 Retry» to continue, or tell me what to simplify.',
   unknown: 'Unknown error.',
+  report: (url) => `If it keeps happening, write to the bot's channel ${url}; the pinned post says how.`,
   details: 'Details',
   code: 'code',
   retry: '🔁 Retry',
@@ -51,7 +53,7 @@ const RULES = [
 export const lostSession = (res) => /no conversation found|session .*not found|thread .*not found|unknown (session|thread)/i.test(`${res.text}\n${res.stderr ?? ''}`);
 
 /** Returns {kind, text, retry}: the owner-facing explanation of a failed turn. */
-export function explain(res, {lang, bin}) {
+export function explain(res, {lang, bin, channel}) {
   const L = lang === 'en' ? EN : RU;
   const raw = `${res.text ?? ''}\n${res.stderr ?? ''}`.trim();
   const kind = res.forcedKind ?? RULES.find(([, test]) => test(res, raw))?.[0] ?? 'unknown';
@@ -59,7 +61,9 @@ export function explain(res, {lang, bin}) {
   const epoch = raw.match(/limit reached\|(\d{10})/)?.[1];
   const when = epoch ? new Date(Number(epoch) * 1000).toLocaleString(lang === 'en' ? 'en-GB' : 'ru-RU', {hour: '2-digit', minute: '2-digit', day: 'numeric', month: 'short'})
     : raw.match(/(?:resets?|try again) (?:at |in )?([^\n,;]{3,30}?)(?:\.|$)/im)?.[1];
-  const advice = kind === 'spawn' ? L.spawn(bin) : kind === 'limit' ? L.limit(when) : L[kind];
+  const advice = (kind === 'spawn' ? L.spawn(bin) : kind === 'limit' ? L.limit(when) : L[kind])
+    // A failure without a known cause may be a bug in the bot: show where to report it.
+    + (channel && ['unknown', 'stalled'].includes(kind) ? `\n${L.report(channel)}` : '');
   const detail = raw.split('\n').filter(Boolean).slice(-6).join('\n').slice(0, 700);
   const code = res.code ?? res.spawnError ?? '—';
   return {

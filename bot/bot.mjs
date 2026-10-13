@@ -9,7 +9,7 @@ import {createHash} from 'node:crypto';
 import {existsSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync} from 'node:fs';
 import {homedir} from 'node:os';
 import {join, relative, sep} from 'node:path';
-import {DATA, FIRST_PROJECT, GUEST, PROJECTS, ROOT, SHARED, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
+import {CHANNEL, DATA, FIRST_PROJECT, GUEST, PROJECTS, ROOT, SHARED, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
 import {DEFAULT_TURNS, activeGuests, canSee, createInvite, cycleLimit, guest, guestsOf, redeemInvite, removable, revoke, ungrant} from './access.mjs';
 import {forward, seedGuest, startGuests, stopGuest, stopGuests} from './guests.mjs';
 import {createProject, dropRequest, ensureProjects, listProjects, projectAt, projectExists, projectName, removeProject, takeRequest, untouched} from './projects.mjs';
@@ -77,6 +77,7 @@ const T = {
     ideasPrompt: 'Пачка идей для рилсов: раздел «1. Ideas» в REELS.md.',
     scheduledIdeasPrompt: (at) => `${SCHEDULED_IDEAS}, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
     ideasNudge: '💡 Идеи с прошлого раза ещё ждут. Прислать свежие?\n\nИли просто напиши, что хочешь: свою идею, правку к рилсу, вопрос — я на связи.',
+    channel: '📣 Канал бота: новости и помощь',
     ideasFresh: '🎲 Прислать новые',
     ideasStop: '🔕 Не напоминать',
     ideasPaused: '🔕 Больше не присылаю идеи по расписанию. Пачка в любой момент — /ideas, вернуть расписание — /settings или просто попроси.',
@@ -149,6 +150,7 @@ const T = {
     ideasPrompt: 'A batch of reel ideas: section "1. Ideas" in REELS.md.',
     scheduledIdeasPrompt: (at) => `${SCHEDULED_IDEAS}, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
     ideasNudge: '💡 The ideas from last time are still waiting. Send fresh ones?\n\nOr just tell me what you want: your own idea, an edit, a question — I am here.',
+    channel: '📣 Bot channel: news and help',
     ideasFresh: '🎲 Send new ones',
     ideasStop: '🔕 Stop reminding',
     ideasPaused: '🔕 No more scheduled ideas. A batch any time: /ideas; the schedule comes back in /settings or when you ask.',
@@ -319,10 +321,13 @@ async function dropKeyAck() {
 
 // ---------- owner ----------
 
+// Under the greeting: a link to the bot's channel (news, updates, where to report problems).
+const helloMarkup = () => ({inline_keyboard: [[{text: T.channel, url: CHANNEL}]]});
+
 async function becomeOwner({id, chatId, name}) {
   Object.assign(state, {ownerId: id, chatId, ownerName: name});
   saveState(state);
-  await tg.sendText(state.chatId, T.hello);
+  await tg.sendText(state.chatId, T.hello, {reply_markup: helloMarkup()});
 }
 
 // Approval written by `node bot/claim.mjs --approve` on this computer.
@@ -973,7 +978,7 @@ async function onAgentError(res, prompt, retried) {
     saveState(state);
     return runTurn(prompt, true);
   }
-  const e = explain(res, {lang: LANG, bin: env.agentBin || env.agent});
+  const e = explain(res, {lang: LANG, bin: env.agentBin || env.agent, channel: CHANNEL});
   console.error('agent error', e.kind, res.code, (res.text ?? '').slice(0, 300));
   if (e.kind === 'context') {
     // Too long to even write a handoff: drop the session, the files keep the memory.
@@ -1141,7 +1146,7 @@ async function onMessage(msg) {
   ownerSeen();
 
   const cmd = msg.text?.match(/^\/(\w+)/)?.[1];
-  if (cmd === 'start') return tg.sendText(state.chatId, GUEST ? T.helloGuest(ownerName(), nameOf(state.project), untouched(state.project)) : T.hello, {silent: !GUEST});
+  if (cmd === 'start') return tg.sendText(state.chatId, GUEST ? T.helloGuest(ownerName(), nameOf(state.project), untouched(state.project)) : T.hello, {silent: !GUEST, reply_markup: helloMarkup()});
   // The machine and the plan are the owner's.
   if (GUEST && ['update', 'usage', 'people'].includes(cmd)) return;
   // A running task's progress line itself turns into «⏹ Stopped».

@@ -5,7 +5,7 @@ import {openAsBlob} from 'node:fs';
 import {join} from 'node:path';
 import {ROOT} from './config.mjs';
 
-const PROFILE_VERSION = 7;
+const PROFILE_VERSION = 8;
 
 const TEXT = {
   ru: {
@@ -16,7 +16,8 @@ const TEXT = {
       + '✏️ Правки — ответом на видео\n'
       + '🎙 Можно писать или говорить голосовыми — я понимаю\n'
       + '✅ «Принять» — и файл в полном качестве у тебя\n\n'
-      + 'Нажми «Старт» и расскажи, о чём будут рилсы.',
+      + 'Нажми «Старт» и расскажи, о чём будут рилсы.\n\n'
+      + '📣 Новости и помощь: @reelserofficial',
     short: 'Идеи, монтаж и правки рилсов прямо в чате — текстом или голосом. Работает на твоём AI-агенте.',
     commands: {ideas: 'Идеи для рилсов прямо сейчас', unfinished: 'Незаконченные рилсы — вернуться и доделать', projects: 'Проекты: сменить, начать новый, поделиться', people: 'С кем ты делишься проектами', settings: 'Настройки: когда присылать идеи и другое', update: 'Проверить обновления бота', usage: 'Лимиты агента и сколько уходит на рилс', stop: 'Остановить текущую задачу', new: 'Начать новую сессию агента'},
   },
@@ -28,7 +29,8 @@ const TEXT = {
       + '✏️ Edits: just reply to the video\n'
       + '🎙 Type or send voice messages — I understand both\n'
       + '✅ «Accept» — and the full-quality file is yours\n\n'
-      + 'Press Start and tell me what your reels are about.',
+      + 'Press Start and tell me what your reels are about.\n\n'
+      + '📣 News and help: @reelserofficial',
     short: 'Reel ideas, editing and revisions right in the chat, by text or voice. Runs on your own AI agent.',
     commands: {ideas: 'Reel ideas right now', unfinished: 'Unfinished reels — get back to one', projects: 'Projects: switch, start a new one, share', people: 'Who you share projects with', settings: 'Settings: when ideas arrive and more', update: 'Check for bot updates', usage: 'Agent limits and what a reel takes', stop: 'Stop the current task', new: 'Start a new agent session'},
   },

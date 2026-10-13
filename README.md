@@ -44,6 +44,8 @@ Manual install: the same steps, by hand, are in [SETUP.md](SETUP.md). Later, to 
 - **It learns from everything.** Every edit, pick, rejection or correction is weighed right away: what would repeat goes into the project's `PLAYBOOK.md` as a rule, and every next version is checked against it, so you never say the same thing twice.
 - **A caption to post.** On accept you get the original file, the cover and a suggested post caption.
 
+News, updates and help: the bot's channel [@reelserofficial](https://t.me/reelserofficial) — its pinned post says where to report a problem. The bot links it in its description, in the greeting and under unexplained errors.
+
 Commands: `/ideas` — ideas now, `/unfinished` — get back to an unfinished reel, `/projects` — switch, start or share a project, `/people` — who you share with, `/settings` — when ideas arrive (time, days, off) and other switches, `/update` — check for a new version now, `/usage` — plan limits and what a reel takes, `/stop` — stop the current task, `/new` — fresh agent session.
 
 ## Layout
