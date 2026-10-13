@@ -18,7 +18,7 @@ The user is probably not technical and should get a working bot by tapping the f
 
 Works on macOS, Linux and Windows. Commands below are given per OS where they differ; on Windows use PowerShell.
 
-**The only requirement is Node 22+.** Nothing else needs installing: not git, Homebrew, ffmpeg, Python or uv. Do not install them for this bot — on macOS even calling `git` without Xcode Command Line Tools pops up a long system install, so check `xcode-select -p` first and avoid git if it fails.
+**The only requirement is Node 22+.** Nothing else needs installing: not git, Homebrew, ffmpeg, Python or uv. Do not install them for this bot — on macOS even calling `git` without Xcode Command Line Tools pops up a long system install, so check `xcode-select -p` first and avoid git if it fails. Claude Code itself calls git, so on such a Mac the window «install command line developer tools?» may pop up anyway: tell the user in one line to press «Cancel», the bot does not need them (it keeps that window away from its own agent).
 
 1. **Folder.** Into the user's home folder, as `reelser`:
    - if git works already (macOS: `xcode-select -p` succeeds; elsewhere `git --version`): `git clone https://github.com/fivol/reelser`;

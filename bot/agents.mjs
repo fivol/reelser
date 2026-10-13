@@ -2,8 +2,8 @@
 // coarse activity (for the progress line) back to the bot.
 import {execFileSync, spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
-import {writeFileSync} from 'node:fs';
-import {join} from 'node:path';
+import {chmodSync, mkdirSync, writeFileSync} from 'node:fs';
+import {delimiter, join} from 'node:path';
 import {DATA, ROOT} from './config.mjs';
 
 // Tool calls → a neutral shape for bot/activity.mjs.
@@ -22,6 +22,23 @@ function emptyMcp() {
   writeFileSync(file, '{"mcpServers":{}}');
   return file;
 }
+
+// macOS without the Command Line Tools: /usr/bin/git is a stub that pops up «install the
+// developer tools?» on every call, and Claude Code calls git on each start. Put a quiet
+// stand-in first in the agent's PATH instead; git does not work there either way.
+function quietGitPath() {
+  if (process.platform !== 'darwin') return null;
+  try {
+    execFileSync('xcode-select', ['-p'], {stdio: 'ignore'});
+    return null;
+  } catch {}
+  const dir = join(DATA, 'nogit');
+  mkdirSync(dir, {recursive: true});
+  writeFileSync(join(dir, 'git'), '#!/bin/sh\necho "git is not installed on this Mac (no Xcode Command Line Tools); work without git" >&2\nexit 1\n');
+  chmodSync(join(dir, 'git'), 0o755);
+  return dir;
+}
+const NOGIT = quietGitPath();
 
 // Paths the agent's own file tools (Read, Write, Edit…) must not touch, as permission
 // deny rules, which hold even with permissions skipped. Shell commands are not covered:
@@ -161,7 +178,7 @@ export function runAgent({agent, bin, model, prompt, sessionId, onCall, isolated
     shell: process.platform === 'win32',
     windowsHide: true,
     // REELS_STUDIO: the project this turn works in, for the scripts and send CLI it runs.
-    env: {...process.env, REELS_BOT: '1', ...(studio ? {REELS_STUDIO: studio} : {})},
+    env: {...process.env, REELS_BOT: '1', ...(studio ? {REELS_STUDIO: studio} : {}), ...(NOGIT ? {PATH: NOGIT + delimiter + process.env.PATH} : {})},
   });
 
   child.stdin.on('error', () => {});
