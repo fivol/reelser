@@ -7,7 +7,7 @@ import {existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, s
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {promisify} from 'node:util';
-import {DATA} from './config.mjs';
+import {SHARED} from './config.mjs';
 
 const run = promisify(execFile);
 const win = process.platform === 'win32';
@@ -18,7 +18,7 @@ const HINT = {
   en: 'Reel feedback: hook, scene, music, track, cover, cut, transition, captions.',
 };
 
-const TOOLS = join(DATA, 'tools');
+const TOOLS = join(SHARED, 'tools');
 const UVX = join(TOOLS, win ? 'uvx.exe' : 'uvx');
 
 function findUvx() {

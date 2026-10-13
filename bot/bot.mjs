@@ -1,18 +1,24 @@
 #!/usr/bin/env node
 // Telegram ↔ coding agent bridge for the reels workflow.
 // One owner, one agent turn at a time; messages that arrive mid-turn join it at once.
+// The same file runs as a guest's bot (REELS_GUEST, bot/guests.mjs): one person the
+// owner shared projects with, their own state and session, updates handed over by the
+// owner's process instead of polled.
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {existsSync, openSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync} from 'node:fs';
-import {join, relative} from 'node:path';
-import {DATA, FIRST_PROJECT, PROJECTS, ROOT, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
+import {homedir} from 'node:os';
+import {join, relative, sep} from 'node:path';
+import {DATA, FIRST_PROJECT, GUEST, PROJECTS, ROOT, SHARED, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
+import {DEFAULT_TURNS, activeGuests, canSee, createInvite, cycleLimit, guest, guestsOf, redeemInvite, removable, revoke, ungrant} from './access.mjs';
+import {forward, seedGuest, startGuests, stopGuest, stopGuests} from './guests.mjs';
 import {createProject, dropRequest, ensureProjects, listProjects, projectAt, projectExists, projectName, removeProject, takeRequest, untouched} from './projects.mjs';
 import {APPROVED as CLAIM_APPROVED, REQUEST as CLAIM_REQUEST} from './claim.mjs';
 import {killTree, runAgent} from './agents.mjs';
 import {activityLabel, classify} from './activity.mjs';
 import {activeMenu, onMenuButton, onMenuText, postPending} from './menu.mjs';
 import {SCHEDULED_IDEAS, currentKeys, forgetKeys, replyKeyboard, splitKeyLine} from './keys.mjs';
-import {applyProfile} from './profile.mjs';
+import {applyProfile, guestCommands} from './profile.mjs';
 import {keepAwake, taskAwake} from './awake.mjs';
 import {acceptedText, codexLimits, limitWarnings, recordTurn, touchedReel, usageText} from './usage.mjs';
 import {badTime, ideasDay, onSettingsButton, parseTime, view as settingsView} from './prefs.mjs';
@@ -87,6 +93,26 @@ const T = {
     otherProject: (name, cur) => `Это сообщение из проекта «${name}», а сейчас открыт «${cur}».`,
     goTo: (name) => `📁 Перейти в «${name}»`,
     stayIn: (name) => `➡️ Остаться в «${name}»`,
+    share: '👥 Поделиться',
+    sharePick: '👥 **Поделиться проектом**\n\nВыбери проект — дам ссылку, перешли её человеку. Он увидит только свои проекты (и сможет заводить новые), а ты — все. Твои задачи идут первыми.',
+    shareNew: '➕ Новый проект для гостя',
+    inviteLink: (name, link) => `🔗 Приглашение в «${name}»:\n${link}\n\nПерешли эту ссылку тому, с кем делишься. Она одноразовая и действует 7 дней. Гости и доступ: /people`,
+    ownInvite: 'Это приглашение для другого человека — перешли ему ссылку.',
+    inviteBad: 'Это приглашение уже использовано или устарело. Попроси новое.',
+    guestJoined: (who, name) => `👤 ${who} открывает проект «${name}» по твоему приглашению. Гости и доступ: /people`,
+    people: '👥 **Гости**\n\nС кем ты делишься проектами. Гость видит только свои проекты, ты — все (/projects). Твои задачи идут первыми.',
+    noPeople: 'Ты пока ни с кем не делишься. Поделиться проектом: /projects → 👥 Поделиться.',
+    guestView: (g, projects) => `👤 **${g.name}**${g.username ? ` (@${g.username})` : ''}\n\n📁 ${projects.length ? projects.map((p) => `«${p}»`).join(', ') : 'проектов нет'}\n🔢 До ${g.turnsPerDay} задач в день`,
+    limitBtn: (n) => `🔢 Лимит: ${n} задач в день`,
+    unshare: (name) => `✖️ Закрыть «${name}»`,
+    revokeBtn: '⛔ Закрыть доступ',
+    back: '⬅️ Назад',
+    revoked: (who) => `⛔ ${who}: доступ закрыт. Проекты остались у тебя.`,
+    helloGuest: (owner, name, fresh) => `🎬 Привет! Это бот для рилсов${owner ? `, ${owner} открывает тебе к нему доступ` : ''}. Я присылаю идеи, монтирую выбранные, правлю по твоим ответам на видео.\n\n📁 Твой проект — «${name}». Видны только твои проекты, новые можно заводить: /projects\n\n🎙 Можно говорить голосовыми, а пока я работаю — дописывать и поправлять.\n\n${fresh ? 'Для начала расскажи, о чём будут рилсы: продукт, ссылка, аудитория.' : 'Напиши, что сделать, или /ideas — свежие идеи.'}`,
+    guestAdded: (name) => `📁 Тебе открыли ещё один проект — «${name}». Перейти: /projects`,
+    projectGone: (gone, now) => `📁 Проект «${gone}» тебе больше не доступен. Открыт «${now}».`,
+    limitReached: (n) => `⏸ На сегодня всё: лимит — ${n} задач в день. Завтра продолжим.`,
+    waitOwner: '⏳ Сейчас бот занят задачей владельца — начну сразу после неё.',
   },
   en: {
     hello: '🎬 Hi! I make reels: I pitch ideas, edit the ones you pick and revise them from your replies to the video.\n\n🎙 You can talk to me with voice messages, it is often faster: dictate an idea or edits and I will get it.\n\n✍️ While I work you can keep writing and correcting: I take it in at once, no need to wait.\n\nFirst tell me what the reels are about: product, link, audience.',
@@ -139,6 +165,26 @@ const T = {
     otherProject: (name, cur) => `This message is from the project «${name}», but «${cur}» is open now.`,
     goTo: (name) => `📁 Go to «${name}»`,
     stayIn: (name) => `➡️ Stay in «${name}»`,
+    share: '👥 Share',
+    sharePick: '👥 **Share a project**\n\nPick a project and I give you a link to forward. The person sees only their projects (and can start new ones); you see all of them. Your tasks go first.',
+    shareNew: '➕ New project for a guest',
+    inviteLink: (name, link) => `🔗 Invite to «${name}»:\n${link}\n\nForward this link to the person you share with. It works once and for 7 days. Guests and access: /people`,
+    ownInvite: 'This is an invite for someone else: forward them the link.',
+    inviteBad: 'This invite is used up or expired. Ask for a new one.',
+    guestJoined: (who, name) => `👤 ${who} opened your invite to «${name}». Guests and access: /people`,
+    people: '👥 **Guests**\n\nWho you share projects with. A guest sees only their projects, you see all (/projects). Your tasks go first.',
+    noPeople: 'You do not share with anyone yet. Share a project: /projects → 👥 Share.',
+    guestView: (g, projects) => `👤 **${g.name}**${g.username ? ` (@${g.username})` : ''}\n\n📁 ${projects.length ? projects.map((p) => `«${p}»`).join(', ') : 'no projects'}\n🔢 Up to ${g.turnsPerDay} tasks a day`,
+    limitBtn: (n) => `🔢 Limit: ${n} tasks a day`,
+    unshare: (name) => `✖️ Close «${name}»`,
+    revokeBtn: '⛔ Close access',
+    back: '⬅️ Back',
+    revoked: (who) => `⛔ ${who}: access closed. The projects stay with you.`,
+    helloGuest: (owner, name, fresh) => `🎬 Hi! This is a reels bot${owner ? ` ${owner} shares with you` : ''}. I pitch ideas, edit the ones you pick and revise them from your replies to the video.\n\n📁 Your project is «${name}». You see only your projects and can start new ones: /projects\n\n🎙 Voice messages work, and while I work you can keep writing and correcting.\n\n${fresh ? 'First tell me what the reels are about: product, link, audience.' : 'Tell me what to do, or /ideas for fresh ideas.'}`,
+    guestAdded: (name) => `📁 One more project is open to you: «${name}». Go there: /projects`,
+    projectGone: (gone, now) => `📁 The project «${gone}» is no longer open to you. Now open: «${now}».`,
+    limitReached: (n) => `⏸ That is all for today: the limit is ${n} tasks a day. More tomorrow.`,
+    waitOwner: '⏳ The bot is busy with its owner\'s task right now; I start right after it.',
   },
 }[LANG];
 
@@ -167,6 +213,8 @@ if (existsSync(PID_FILE)) {
 }
 writeFileSync(PID_FILE, String(process.pid));
 process.on('exit', () => {
+  if (!GUEST) stopGuests();
+  setBusy(false);
   // A restart mid-turn: stop the agent and leave a note, the turn is redone on start.
   stopRenders();
   if (current?.handle) {
@@ -177,6 +225,8 @@ process.on('exit', () => {
   rmSync(PID_FILE, {force: true});
 });
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => process.exit(0));
+// A guest's bot lives only as long as the owner's that started it.
+if (GUEST) process.on('disconnect', () => process.exit(0));
 
 const tg = telegram(env.token);
 
@@ -189,9 +239,15 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
     process.exit(1);
   });
 }
+// What belongs to the session in one project; dropped when the bot moves to another.
+const SESSION_KEYS = ['sessionId', 'sessionTurns', 'sessionContext', 'rotate', 'note', 'acceptedPending', 'lastReel', 'awaitingTime'];
 const state = loadState();
 // Before anything reads the active project: the old single-folder layout becomes one.
-if (ensureProjects(state)) saveState(state);
+// A guest whose open project was taken away meanwhile starts a fresh session elsewhere.
+if (ensureProjects(state)) {
+  if (GUEST) for (const k of SESSION_KEYS) delete state[k];
+  saveState(state);
+}
 const STATUS_FILE = join(DATA, 'status.txt');
 const SENT_FILE = join(DATA, 'sent.txt');
 const KEYS_FILE = join(DATA, 'keyboard.json');
@@ -200,7 +256,34 @@ const OWNER_WROTE_FILE = join(DATA, 'owner-wrote.txt');
 const queue = [];
 let current = null; // {handle, statusId, startedAt, activity, lastText, sentMark, reason}
 
-if (await applyProfile(tg, env.token, state, LANG).catch((e) => console.error('profile', e.message))) saveState(state);
+if (!GUEST && (await applyProfile(tg, env.token, state, LANG).catch((e) => console.error('profile', e.message)))) saveState(state);
+
+// ---------- sharing ----------
+//
+// The owner's tasks go first: while one runs, guests' bots wait before starting theirs
+// (a guest's task already running is not stopped). The flag holds the owner's pid.
+const BUSY_FILE = join(SHARED, 'busy');
+function setBusy(on) {
+  if (GUEST) return;
+  if (on) writeFileSync(BUSY_FILE, String(process.pid));
+  else rmSync(BUSY_FILE, {force: true});
+}
+function ownerBusy() {
+  try {
+    process.kill(Number(readFileSync(BUSY_FILE, 'utf8')), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+function ownerName() {
+  if (!GUEST) return state.ownerName;
+  try {
+    return JSON.parse(readFileSync(join(SHARED, 'state.json'), 'utf8')).ownerName ?? '';
+  } catch {
+    return '';
+  }
+}
 
 // ---------- progress line ----------
 
@@ -251,12 +334,14 @@ setInterval(() => {
 }, 2000);
 
 // Stay awake on the charger if the owner asked; re-applied as settings change.
-keepAwake(settings().keepAwake === true);
-setInterval(() => keepAwake(settings().keepAwake === true), 30_000);
+if (!GUEST) {
+  keepAwake(settings().keepAwake === true);
+  setInterval(() => keepAwake(settings().keepAwake === true), 30_000);
+}
 
 // ---------- /settings ----------
 
-const settingsOpts = () => ({lang: LANG, agent: env.agent, project: nameOf(state.project)});
+const settingsOpts = () => ({lang: LANG, agent: env.agent, project: nameOf(state.project), guest: Boolean(GUEST)});
 
 async function showSettings() {
   const v = settingsView(settings(), 'main', settingsOpts());
@@ -343,9 +428,17 @@ async function showUnfinished() {
 
 const nameOf = (slug) => projectName(slug) || (slug === FIRST_PROJECT ? T.mainName : T.unnamed);
 
+// The owner sees whose projects are shared: «Blog · 👤 Ann».
+const labelOf = (slug) => {
+  const who = GUEST ? [] : guestsOf(slug);
+  return `${nameOf(slug)}${who.length ? ` · 👤 ${who.join(', ')}` : ''}`;
+};
+
 async function showProjects() {
-  const rows = listProjects().map((p) => [{text: `${p.slug === state.project ? '✅ ' : ''}${nameOf(p.slug)}`.slice(0, 60), callback_data: `p:${p.slug}`}]);
-  rows.push([{text: T.newProject, callback_data: 'p:+'}], [{text: T.close, callback_data: 'p:x'}]);
+  const rows = listProjects().map((p) => [{text: `${p.slug === state.project ? '✅ ' : ''}${labelOf(p.slug)}`.slice(0, 60), callback_data: `p:${p.slug}`}]);
+  rows.push([{text: T.newProject, callback_data: 'p:+'}]);
+  if (!GUEST) rows.push([{text: T.share, callback_data: 'sh:?'}]);
+  rows.push([{text: T.close, callback_data: 'p:x'}]);
   await tg.sendText(state.chatId, T.projects, {silent: true, reply_markup: {inline_keyboard: rows}});
 }
 
@@ -368,7 +461,7 @@ async function onProjectButton(q) {
 function requestSwitch(req) {
   // A new project replaced by another choice before anyone used it leaves no trace.
   const prev = state.switchTo;
-  if (prev?.created && prev.slug !== req.slug && untouched(prev.slug)) removeProject(prev.slug);
+  if (prev?.created && prev.slug !== req.slug && untouched(prev.slug) && removable(prev.slug)) removeProject(prev.slug);
   state.switchTo = req;
   saveState(state);
   if (current) tg.sendText(state.chatId, T.switchLater(nameOf(req.slug)), {silent: true}).catch(() => {});
@@ -387,11 +480,11 @@ async function switchProject() {
   // The owner picked another project while the handoff ran: that one goes next.
   if (state.switchTo !== req) return;
   delete state.switchTo;
-  for (const k of ['sessionId', 'sessionTurns', 'sessionContext', 'rotate', 'note', 'acceptedPending', 'lastReel', 'awaitingTime']) delete state[k];
+  for (const k of SESSION_KEYS) delete state[k];
   await postPending(tg, state.chatId, {drop: true});
   forgetKeys();
   const fromName = projectExists(from) ? nameOf(from) : '';
-  if (projectExists(from) && untouched(from)) removeProject(from);
+  if (projectExists(from) && untouched(from) && removable(from)) removeProject(from);
   state.project = req.slug;
   saveState(state);
   const text = req.created ? `${T.projectNew(projectName(req.slug), fromName)}${req.carry ? '' : `\n\n${T.askAbout}`}` : T.projectOpen(nameOf(req.slug));
@@ -437,6 +530,155 @@ async function onCrossButton(q) {
     remember(c.prompt);
     enqueue(`(This answers a message from another project, «${nameOf(c.slug)}»; the owner chose to stay in this one.)\n\n${c.prompt}`);
   }
+}
+
+// ---------- sharing: invites and guests (owner's side) ----------
+
+let botUsername = '';
+async function inviteLink(slug) {
+  botUsername ||= (await tg.call('getMe')).username;
+  return `https://t.me/${botUsername}?start=g_${createInvite(slug)}`;
+}
+
+async function onShareButton(q) {
+  const arg = q.data.slice(3);
+  if (arg === 'x') return markChosen(q, null);
+  if (arg === '?') {
+    await markChosen(q, T.share.replace(/^\S+\s/, ''));
+    const rows = listProjects().map((p) => [{text: labelOf(p.slug).slice(0, 60), callback_data: `sh:${p.slug}`}]);
+    rows.push([{text: T.shareNew, callback_data: 'sh:+'}], [{text: T.close, callback_data: 'sh:x'}]);
+    return tg.sendText(state.chatId, T.sharePick, {silent: true, reply_markup: {inline_keyboard: rows}});
+  }
+  // A new project for the guest is left for them: their onboarding names and fills it.
+  const slug = arg === '+' ? createProject('') : arg;
+  if (!projectExists(slug)) return markChosen(q, null);
+  await markChosen(q, arg === '+' ? T.shareNew.replace(/^\S+\s/, '') : nameOf(slug));
+  await tg.sendText(state.chatId, T.inviteLink(nameOf(slug), await inviteLink(slug)), {silent: true});
+}
+
+/** Someone opened t.me/<bot>?start=g_<code>. */
+async function joinByInvite(msg, code) {
+  const name = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(' ') || msg.from.username || String(msg.from.id);
+  const r = redeemInvite(code, {id: msg.from.id, chatId: msg.chat.id, name, username: msg.from.username});
+  if (!r || !projectExists(r.slug)) return tg.sendText(msg.chat.id, T.inviteBad);
+  console.log(`guest ${msg.from.id} joined with ${r.slug}`);
+  if (r.isNew) {
+    seedGuest(msg.from.id, {chatId: msg.chat.id, name, slug: r.slug});
+    await guestCommands(tg, msg.chat.id, LANG).catch((e) => console.error('guest commands', e.message));
+    forward(msg.from.id, {message: msg});
+  } else {
+    await tg.sendText(msg.chat.id, T.guestAdded(nameOf(r.slug)));
+  }
+  await tg.sendText(state.chatId, T.guestJoined(name, nameOf(r.slug)), {silent: true}).catch(() => {});
+}
+
+function peopleView(id) {
+  const people = activeGuests();
+  if (!people.length) return {text: T.noPeople, reply_markup: {inline_keyboard: []}};
+  const g = id && people.find((x) => x.id === id);
+  if (!g) {
+    const rows = people.map((x) => [{text: `👤 ${x.name} · ${x.projects.filter(projectExists).length} 📁`.slice(0, 60), callback_data: `pp:${x.id}`}]);
+    rows.push([{text: T.close, callback_data: 'p:x'}]);
+    return {text: T.people, reply_markup: {inline_keyboard: rows}};
+  }
+  const projects = g.projects.filter(projectExists);
+  const rows = projects.map((slug) => [{text: T.unshare(nameOf(slug)).slice(0, 60), callback_data: `pu:${g.id}:${slug}`}]);
+  rows.push([{text: T.limitBtn(g.turnsPerDay ?? DEFAULT_TURNS), callback_data: `pl:${g.id}`}], [{text: T.revokeBtn, callback_data: `pk:${g.id}`}], [{text: T.back, callback_data: 'pp:'}]);
+  return {text: T.guestView(g, projects.map(nameOf)), reply_markup: {inline_keyboard: rows}};
+}
+
+const showPeople = () => {
+  const v = peopleView();
+  return tg.sendText(state.chatId, v.text, {silent: true, reply_markup: v.reply_markup});
+};
+
+async function onPeopleButton(q) {
+  const [kind, id, slug] = q.data.split(':');
+  const g = id && guest(id);
+  if (kind === 'pk' && g) {
+    revoke(id);
+    stopGuest(id);
+    console.log(`guest ${id}: access closed`);
+    return tg.call('editMessageText', {chat_id: state.chatId, message_id: q.message.message_id, text: T.revoked(g.name), reply_markup: {inline_keyboard: []}}).catch(() => {});
+  }
+  if (kind === 'pu' && g) {
+    ungrant(id, slug);
+    // Their bot leaves that project at once if it is the open one.
+    forward(id, {access: true});
+  }
+  if (kind === 'pl' && g) cycleLimit(id);
+  const v = peopleView(id || null);
+  const {toHtml} = await import('./format.mjs');
+  await tg.call('editMessageText', {chat_id: state.chatId, message_id: q.message.message_id, text: toHtml(v.text), parse_mode: 'HTML', reply_markup: v.reply_markup}).catch(() => {});
+}
+
+// ---------- sharing: the guest's own bot ----------
+
+/** The owner took the open project away: stop, and move to one still open to the guest. */
+async function checkAccess() {
+  if (projectExists(state.project)) return;
+  const gone = nameOf(state.project);
+  interrupt('stop');
+  ensureProjects(state);
+  for (const k of SESSION_KEYS) delete state[k];
+  delete state.switchTo;
+  saveState(state);
+  const msg = await tg.call('sendMessage', {chat_id: state.chatId, text: T.projectGone(gone, nameOf(state.project)), reply_markup: {remove_keyboard: true}}).catch(() => null);
+  if (msg) state.projectLog = [...(state.projectLog ?? []), [msg.message_id, state.project]].slice(-200);
+  forgetKeys();
+  saveState(state);
+}
+
+// The owner's task runs: wait for it, checking every few seconds; say so once.
+let ownerWait = null;
+function waitForOwner() {
+  if (!GUEST || !ownerBusy()) {
+    state.toldWait = false;
+    return false;
+  }
+  if (!state.toldWait) {
+    state.toldWait = true;
+    saveState(state);
+    tg.sendText(state.chatId, T.waitOwner, {silent: true}).catch(() => {});
+  }
+  ownerWait ??= setTimeout(() => {
+    ownerWait = null;
+    drain();
+  }, 5000);
+  return true;
+}
+
+/** Counts a guest's task against their daily limit; false (and a note) once it is used up. */
+function guestTurn() {
+  if (!GUEST) return true;
+  const day = new Date().toLocaleDateString('sv');
+  const limit = guest(GUEST)?.turnsPerDay ?? DEFAULT_TURNS;
+  if (state.turnsDay?.day !== day) state.turnsDay = {day, n: 0};
+  if (state.turnsDay.n >= limit) {
+    saveState(state);
+    tg.sendText(state.chatId, T.limitReached(limit), {silent: true}).catch(() => {});
+    return false;
+  }
+  state.turnsDay.n++;
+  saveState(state);
+  return true;
+}
+
+// The guest's agent: never the owner's global setup, and its own file tools kept off the
+// owner's data, other projects and private folders. Shell commands follow GUEST.md only.
+function guestDeny() {
+  const home = homedir();
+  const paths = [join(ROOT, '.env'), join(SHARED, '**')];
+  if (existsSync(PROJECTS)) {
+    for (const d of readdirSync(PROJECTS, {withFileTypes: true})) if (d.isDirectory() && !canSee(d.name)) paths.push(join(PROJECTS, d.name, '**'));
+  }
+  for (const name of ['.ssh', '.aws', '.gnupg', '.config', '.claude', '.claude.json', '.codex', '.netrc', '.npmrc', 'Library', 'Desktop', 'Downloads', 'Documents', 'Pictures', 'Movies', 'Music']) {
+    const full = join(home, name);
+    // Never a folder the bot itself lives in.
+    if (!existsSync(full) || `${ROOT}${sep}`.startsWith(`${full}${sep}`)) continue;
+    paths.push(statSync(full).isDirectory() ? join(full, '**') : full);
+  }
+  return paths;
 }
 
 // Progress line: one line — whatever is newest, the agent's own stage or what it is
@@ -527,11 +769,11 @@ setInterval(() => {
 // Each project keeps its own handoff, so coming back to it picks up where it was left.
 const handoffFile = () => join(studio(), 'handoff.md');
 const projectPath = (slug = state.project) => relative(ROOT, join(PROJECTS, slug)).split('\\').join('/');
-const preamble = () => `You are running as the reels Telegram bot. Follow AGENTS.md and REELS.md; before your first reply read REELS.md, the project's brief.md and PLAYBOOK.md, and the README of the reel the handoff names as active. Talk to the owner through your final reply and \`node bot/send.mjs\`; name each stage of your work with \`node bot/send.mjs --status "<emoji> <stage>"\` (e.g. «💡 Придумываю идеи», «🎬 Монтирую v2»). The active project is \`${projectPath()}/\` (\`<project>/\` in REELS.md), ${projectName(state.project) ? `named «${projectName(state.project)}»` : 'not named yet'}.`;
+const preamble = () => `You are running as the reels Telegram bot. Follow AGENTS.md and REELS.md; before your first reply read REELS.md, the project's brief.md and PLAYBOOK.md, and the README of the reel the handoff names as active. Talk to the owner through your final reply and \`node bot/send.mjs\`; name each stage of your work with \`node bot/send.mjs --status "<emoji> <stage>"\` (e.g. «💡 Придумываю идеи», «🎬 Монтирую v2»). The active project is \`${projectPath()}/\` (\`<project>/\` in REELS.md), ${projectName(state.project) ? `named «${projectName(state.project)}»` : 'not named yet'}.${GUEST ? ` You work for a guest, ${state.ownerName}: someone the owner of this computer shared the bot with; in REELS.md «the owner» means this guest. Read GUEST.md first: its limits come on top of REELS.md and win where they differ.` : ''}`;
 const handoffPrompt = () => `This session is about to be closed. First put everything worth keeping into the files in ${projectPath()}/: reel details, decisions and build notes into that reel's README.md, rules and lessons into PLAYBOOK.md, ideas into ideas.md. Then write ${projectPath()}/handoff.md, only the live state the files do not show: which reel is active (its README path), what was sent last, the question the owner has not answered yet (with its buttons). No reel history, no notes that belong in a file. At most 15 lines. Reply with one word: done.`;
 
 // The agent's instructions; a session that read an older version starts over.
-const INSTRUCTIONS = ['AGENTS.md', 'REELS.md', 'guides'];
+const INSTRUCTIONS = ['AGENTS.md', 'REELS.md', 'GUEST.md', 'guides'];
 function instructionsHash() {
   const h = createHash('sha1');
   for (const f of INSTRUCTIONS) {
@@ -569,6 +811,7 @@ function openingPrompt(prompt) {
  */
 async function runWithStatus(prompt, firstLine, {quiet = false, open = false} = {}) {
   rmSync(STATUS_FILE, {force: true});
+  setBusy(true);
   taskAwake(true);
   current = {startedAt: Date.now(), activity: 'think', sentMark: mtime(SENT_FILE), quiet, open, firstLine};
   // Until the owner has seen it on three tasks or written mid-task on their own.
@@ -589,7 +832,8 @@ async function runWithStatus(prompt, firstLine, {quiet = false, open = false} = 
       sessionId: state.sessionId,
       // The owner's global agent setup (plugins, hooks, MCP servers) only on an explicit
       // `agentGlobalSettings: true` in data/settings.json, as /settings and SECURITY.md say.
-      isolated: settings().agentGlobalSettings !== true,
+      isolated: GUEST || settings().agentGlobalSettings !== true,
+      deny: GUEST ? guestDeny() : undefined,
       studio: studio(),
       prompt: state.sessionId ? prompt : openingPrompt(prompt),
       onCall: (call) => {
@@ -616,6 +860,7 @@ async function runWithStatus(prompt, firstLine, {quiet = false, open = false} = 
     else if (current.reason === 'stop') await closeStatus(T.cancelled).catch(() => {});
     else await dropStatus().catch(() => {});
     current = null;
+    setBusy(false);
     if (!queue.length) taskAwake(false);
   }
 
@@ -641,7 +886,8 @@ async function trackUsage(res) {
     if (reel) state.lastReel = reel;
     if (limits) state.limits = {...state.limits, ...limits};
     state.warned ??= {};
-    for (const w of limitWarnings(state.limits, state.warned, LANG)) await tg.sendText(state.chatId, w.text, {silent: !w.loud});
+    // The plan is the owner's: a guest is not told about its limits.
+    if (!GUEST) for (const w of limitWarnings(state.limits, state.warned, LANG)) await tg.sendText(state.chatId, w.text, {silent: !w.loud});
     saveState(state);
   } catch (e) {
     console.error('usage', e.message);
@@ -758,9 +1004,11 @@ async function drain() {
       await switchProject().catch((e) => console.error('project', e));
       continue;
     }
+    if (waitForOwner()) return;
     // Everything that piled up during the last turn goes in as one message.
     let prompt = queue.splice(0).join('\n\n---\n\n');
     saveQueue();
+    if (!guestTurn()) continue;
     if (state.note) {
       prompt = `(${state.note})\n\n${prompt}`;
       delete state.note;
@@ -881,11 +1129,21 @@ async function onMessage(msg) {
     writeFileSync(CLAIM_REQUEST, JSON.stringify({id: msg.from.id, chatId: msg.chat.id, name, username: msg.from.username}));
     return tg.sendText(msg.chat.id, T.confirmOnComputer);
   }
-  if (msg.from.id !== state.ownerId) return tg.sendText(msg.chat.id, T.private, {silent: true}).catch(() => {});
+  // Invites (t.me/<bot>?start=g_<code>) and guests are the owner's process's business:
+  // a guest's message goes to their own bot.
+  const invite = msg.text?.match(/^\/start\s+g_(\S+)/)?.[1];
+  if (msg.from.id !== state.ownerId) {
+    if (!GUEST && invite) return joinByInvite(msg, invite);
+    if (!GUEST && guest(msg.from.id)) return forward(msg.from.id, {message: msg});
+    return tg.sendText(msg.chat.id, T.private, {silent: true}).catch(() => {});
+  }
+  if (invite && !GUEST) return tg.sendText(state.chatId, T.ownInvite, {silent: true});
   ownerSeen();
 
   const cmd = msg.text?.match(/^\/(\w+)/)?.[1];
-  if (cmd === 'start') return tg.sendText(state.chatId, T.hello, {silent: true});
+  if (cmd === 'start') return tg.sendText(state.chatId, GUEST ? T.helloGuest(ownerName(), nameOf(state.project), untouched(state.project)) : T.hello, {silent: !GUEST});
+  // The machine and the plan are the owner's.
+  if (GUEST && ['update', 'usage', 'people'].includes(cmd)) return;
   // A running task's progress line itself turns into «⏹ Stopped».
   if (cmd === 'stop') return interrupt('stop') ? null : tg.sendText(state.chatId, T.idle, {silent: true});
   if (cmd === 'new') {
@@ -897,6 +1155,7 @@ async function onMessage(msg) {
   if (cmd === 'ideas') return enqueue(T.ideasPrompt);
   if (cmd === 'unfinished') return showUnfinished();
   if (cmd === 'projects') return showProjects();
+  if (cmd === 'people') return showPeople();
   if (cmd === 'settings') return showSettings();
   if (cmd === 'update') return checkUpdates(true);
   if (cmd === 'usage') return tg.sendText(state.chatId, usageText(state.limits, LANG), {silent: true});
@@ -992,7 +1251,11 @@ function flushBatch() {
 
 async function onButton(q) {
   await tg.call('answerCallbackQuery', {callback_query_id: q.id}).catch(() => {});
-  if (q.from.id !== state.ownerId || q.data === 'ctl:done') return;
+  if (q.from.id !== state.ownerId) {
+    if (!GUEST && guest(q.from.id)) forward(q.from.id, {callback: q});
+    return;
+  }
+  if (q.data === 'ctl:done') return;
   ownerSeen();
   if (q.data === 'ideas:new' || q.data === 'ideas:off') {
     tg.call('editMessageReplyMarkup', {chat_id: state.chatId, message_id: q.message.message_id, reply_markup: {inline_keyboard: []}}).catch(() => {});
@@ -1002,7 +1265,9 @@ async function onButton(q) {
   if (q.data.startsWith('set:')) return onSettings(q);
   if (q.data.startsWith('p:')) return onProjectButton(q);
   if (q.data.startsWith('px:')) return onCrossButton(q);
-  if (q.data === 'upd:yes' || q.data === 'upd:no') {
+  if (!GUEST && q.data.startsWith('sh:')) return onShareButton(q);
+  if (!GUEST && /^p[pulk]:/.test(q.data)) return onPeopleButton(q);
+  if (!GUEST && (q.data === 'upd:yes' || q.data === 'upd:no')) {
     const label = q.data === 'upd:yes' ? T.updateYes : T.updateNo;
     await markChosen(q, label);
     if (q.data === 'upd:yes') {
@@ -1099,7 +1364,8 @@ setInterval(async () => {
 // never applied on their own: the owner gets the list of changes and an «Update»
 // button. A failed fast-forward (local edits, diverged history) goes to the agent.
 
-const BOOT_HEAD = await head();
+// A guest's bot never updates the machine: the owner's does.
+const BOOT_HEAD = GUEST ? null : await head();
 const MERGE_PROMPT = (err) => `The owner approved updating the bot itself, but \`git pull --ff-only\` failed:\n${err}\nMerge the upstream changes, keeping the owner's local changes; run \`node --check\` on every file in bot/. Do not touch projects/ or data/. Then tell the owner in one line what is new.`;
 
 async function announceUpdate() {
@@ -1131,7 +1397,7 @@ const updatesOff = () => settings().updateChecks === false || settings().autoUpd
 // `asked`: the owner ran /update — check even if checks are off, show the offer again
 // and say so when there is nothing new.
 async function checkUpdates(asked = false) {
-  if ((updatesOff() && !asked) || !state.chatId) return;
+  if ((updatesOff() && !asked) || !state.chatId || GUEST) return;
   try {
     const subjects = await pendingUpdates();
     const upstream = await upstreamHead();
@@ -1161,6 +1427,7 @@ async function checkUpdates(asked = false) {
 
 // Runs after the owner's «Update»; waits for the current task to finish first.
 async function applyUpdate() {
+  if (GUEST) return;
   if (current || queue.length) {
     state.updateApproved = true;
     return saveState(state);
@@ -1238,7 +1505,7 @@ setInterval(() => {
     console.error('watchdog: a task never reached the agent for 3 min, restarting');
     return restart();
   }
-  if (now - lastPoll > 5 * 60_000) {
+  if (!GUEST && now - lastPoll > 5 * 60_000) {
     console.error('watchdog: no answer from Telegram for 5 min, restarting');
     return restart();
   }
@@ -1257,8 +1524,19 @@ delete state.pending;
 state.queue = [];
 for (const prompt of restored) enqueue(prompt, {byOwner: false});
 for (const prompt of unbatched) batch(prompt);
-let offset = state.offset ?? 0;
 let handling = Promise.resolve();
+if (GUEST) {
+  // Updates come from the owner's process, in order; {access} after the owner changed what is shared.
+  process.on('message', (m) => {
+    if (m?.message) handling = handling.then(() => onMessage(m.message)).catch((e) => console.error('message', e));
+    if (m?.callback) handling = handling.then(() => onButton(m.callback)).catch((e) => console.error('button', e));
+    if (m?.access) handling = handling.then(checkAccess).catch((e) => console.error('access', e));
+  });
+  process.send({ready: true});
+  await new Promise(() => {});
+}
+startGuests();
+let offset = state.offset ?? 0;
 let conflicts = 0;
 for (;;) {
   try {

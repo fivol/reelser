@@ -19,6 +19,7 @@ Autostart entry, per OS (from setup step 7):
 | connect the board or file where they keep ideas | Setup step 6c: check the agent can reach it, write `ideasBoard` in the active project's `projects/<slug>/settings.json` (`state.project` in `data/state.json`). |
 | ideas time, sleep, global settings | Point to `/settings` in the bot, or edit the files (the bot re-reads them): ideas time in `projects/<slug>/settings.json`, sleep and global settings in `data/settings.json`. |
 | projects (several sets of reels, e.g. for a partner) | Point to `/projects` in the bot; or ask the bot in words, it creates, switches, renames and archives them. Each lives in `projects/<slug>/`. |
+| share with someone, a guest's access or limit | Point to `/projects` → «👥 Share» (an invite link) and `/people` (projects, daily limit, close access) in the bot. Access is in `data/access.json`; a guest's bot logs to `data/guests/<id>/bot.log`. |
 | move it to another computer | Copy the folder without `template/node_modules`; on the new machine run setup steps 3, 4 and 7; stop the old one first (one bot per token). |
 | remove it | Ask: **«Remove the bot? Your reels in projects/ can be kept.»** — `Remove, keep my reels (recommended)` / `Remove everything` / `Cancel`. Then: stop it; delete the autostart entry; delete the folder (moving `projects/` to their Documents first if they keep it); remind them in one line that the Telegram bot itself can be deleted with `/deletebot` in @BotFather. |
 

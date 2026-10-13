@@ -10,10 +10,12 @@
 //   node bot/projects.mjs archive <slug>               move an inactive one to projects/.archive/
 // --carry: the owner's request that led here, in their words with file paths; the new
 // project's first turn starts from it.
+// In a guest's process (bot/access.mjs) all of this sees only that guest's projects.
 import {cpSync, existsSync, mkdirSync, readFileSync, readdirSync, renameSync, rmSync, writeFileSync} from 'node:fs';
 import {join, relative} from 'node:path';
 import {parseArgs} from 'node:util';
-import {DATA, FIRST_PROJECT, GLOBAL_KEYS, PROJECTS, ROOT, loadState} from './config.mjs';
+import {DATA, FIRST_PROJECT, GLOBAL_KEYS, GUEST, PROJECTS, ROOT, loadState} from './config.mjs';
+import {canSee, grant, removable} from './access.mjs';
 
 const STARTER = join(ROOT, 'starter');
 const REQUEST = join(DATA, 'project-request.json');
@@ -44,13 +46,13 @@ export const projectName = (slug) => readJson(join(dir(slug), 'settings.json')).
 export function listProjects() {
   if (!existsSync(PROJECTS)) return [];
   return readdirSync(PROJECTS, {withFileTypes: true})
-    .filter((d) => d.isDirectory() && !d.name.startsWith('.'))
+    .filter((d) => d.isDirectory() && !d.name.startsWith('.') && canSee(d.name))
     .map((d) => ({slug: d.name, name: projectName(d.name), created: readJson(join(dir(d.name), 'settings.json')).created ?? ''}))
     .sort((a, b) => (a.slug === FIRST_PROJECT ? -1 : b.slug === FIRST_PROJECT ? 1 : a.created.localeCompare(b.created)))
     .map(({slug, name}) => ({slug, name}));
 }
 
-export const projectExists = (slug) => Boolean(slug) && !slug.startsWith('.') && existsSync(join(dir(slug), 'settings.json'));
+export const projectExists = (slug) => Boolean(slug) && !slug.startsWith('.') && existsSync(join(dir(slug), 'settings.json')) && canSee(slug);
 
 function seed(slug, name) {
   cpSync(STARTER, dir(slug), {recursive: true});
@@ -61,8 +63,12 @@ function seed(slug, name) {
   return slug;
 }
 
-/** Creates a project from starter/ and returns its slug. */
-export const createProject = (name = '') => seed(slugFor(name), name);
+/** Creates a project from starter/ and returns its slug; a guest's is theirs. */
+export function createProject(name = '') {
+  const slug = seed(slugFor(name), name);
+  if (GUEST) grant(GUEST, slug, {own: true});
+  return slug;
+}
 
 /**
  * True for a project nobody worked in: brief still the starter one, no reels, nothing
@@ -106,7 +112,7 @@ function rewritePaths(root, slug) {
 export function ensureProjects(state) {
   mkdirSync(PROJECTS, {recursive: true});
   const old = join(ROOT, 'studio');
-  if (!process.env.REELS_PROJECTS && existsSync(old) && !existsSync(dir(FIRST_PROJECT))) {
+  if (!GUEST && !process.env.REELS_PROJECTS && existsSync(old) && !existsSync(dir(FIRST_PROJECT))) {
     renameSync(old, dir(FIRST_PROJECT));
     const first = dir(FIRST_PROJECT);
     if (existsSync(join(DATA, 'inbox'))) renameSync(join(DATA, 'inbox'), join(first, 'inbox'));
@@ -120,7 +126,11 @@ export function ensureProjects(state) {
     rewritePaths(first, FIRST_PROJECT);
     console.log(`moved studio/ to projects/${FIRST_PROJECT}/`);
   }
-  if (!listProjects().length) seed(FIRST_PROJECT, '');
+  // A guest whose projects were all taken away starts a fresh one of their own.
+  if (!listProjects().length) {
+    if (GUEST) createProject('');
+    else seed(FIRST_PROJECT, '');
+  }
   if (projectExists(state.project)) return false;
   state.project = listProjects()[0].slug;
   // Everything said in the chat so far belongs to it.
@@ -161,7 +171,7 @@ if (process.argv[1]?.endsWith('projects.mjs')) {
   } else if (action === 'switch' && projectExists(arg)) {
     if (arg === active) console.log('Already the active project.');
     else request(arg, false);
-  } else if (action === 'archive' && projectExists(arg) && arg !== active) {
+  } else if (action === 'archive' && projectExists(arg) && arg !== active && (!GUEST || removable(arg))) {
     mkdirSync(join(PROJECTS, '.archive'), {recursive: true});
     renameSync(dir(arg), join(PROJECTS, '.archive', arg));
     console.log(`Moved to projects/.archive/${arg}`);

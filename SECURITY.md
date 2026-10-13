@@ -4,8 +4,8 @@ Written for the owner and for the agent that installs the bot: everything the co
 
 ## Who controls it
 
-- **Only the owner.** The installer gives the user a link `t.me/<bot>?start=<code>` with a code it made up and stored in `.env`; opening it claims the bot. Without a code, the first person to press Start is only a request until the user confirms «this is me» on the computer the bot runs on (`bot/claim.mjs`). Messages from anyone else are answered with one line and never reach the agent. Private chats only: added to a group, the bot leaves.
-- **The agent acts only on the owner's behalf.** A turn of the agent starts only from: an owner's message or button tap, the daily batch of ideas at the time the owner set (`ideasAt`, can be turned off), or an update the owner approved. Nothing else, no remote commands.
+- **The owner, and the guests the owner invites.** The installer gives the user a link `t.me/<bot>?start=<code>` with a code it made up and stored in `.env`; opening it claims the bot. Without a code, the first person to press Start is only a request until the user confirms «this is me» on the computer the bot runs on (`bot/claim.mjs`). The owner can share projects (`/projects` → «👥 Share»): a one-time invite link, valid for 7 days, makes whoever opens it a guest with that project. A guest's messages go to their own copy of the bot (`bot/guests.mjs`, state in `data/guests/<id>/`), which sees only the guest's projects and runs at most the daily number of tasks the owner set (30 by default); the owner's tasks go first, and `/people` closes a guest's access at once. Messages from anyone else are answered with one line and never reach the agent. Private chats only: added to a group, the bot leaves. Who has access is in `data/access.json`, written only by the bot (`bot/access.mjs`).
+- **The agent acts only on the owner's (or a guest's) behalf.** A turn of the agent starts only from: an owner's or guest's message or button tap, the daily batch of ideas at the time the owner set (`ideasAt`, can be turned off), or an update the owner approved. Nothing else, no remote commands.
 - **No remote control by the author.** The repo cannot push code to your machine: the bot only *checks* for a new version and installs it after the owner taps «⬆️ Update» (`bot/update.mjs`). Checks can be turned off (`updateChecks: false`).
 - **Stop at any time.** «⏹ Stop» or `/stop` kills the agent with every process it started, including background renders.
 
@@ -48,7 +48,7 @@ The agent (Claude Code or Codex) talks to its own provider and, while making a r
 
 - Read outside the folder: with Codex, its own session files in `~/.codex/sessions` — only the plan-limit numbers of the bot's session, for `/usage` and limit warnings.
 
-- Written by the bot: `data/` (state, logs, files the owner sent, menus, render jobs, backups of bot files you edited before an update replaced them), `projects/` (per project: brief, ideas, playbook, reels, files the owner sent), `template/node_modules`; on an approved update, the bot's own files in this folder.
+- Written by the bot: `data/` (state, logs, who has access and each guest's own bot state in `data/guests/`, files the owner sent, menus, render jobs, backups of bot files you edited before an update replaced them), `projects/` (per project: brief, ideas, playbook, reels, files the owner sent), `template/node_modules`; on an approved update, the bot's own files in this folder.
 - Caches of the tools it starts (uv's package cache, the Whisper model, npm, Remotion's Chromium) go to the usual per-user cache folders.
 - Outside the folder, once at setup: one autostart entry — `~/Library/LaunchAgents/com.reels-bot.plist` (macOS), `~/.config/systemd/user/reels-bot.service` (Linux) or `reels-bot.vbs` in the Startup folder (Windows).
 - Secrets: the bot token and `OWNER_CODE` live only in `.env` (gitignored, never printed, never sent anywhere but Telegram).
@@ -61,7 +61,9 @@ The agent runs headless, so it cannot show permission prompts: it starts with th
 - never publish, post or email anything; never edit the owner's product code;
 - with Claude Code, use the owner's global plugins and MCP connections only if the owner said yes at setup (`agentGlobalSettings`).
 
-This is a rule set, not an operating-system sandbox: the agent has the permissions of your user account, as it does in your terminal. That is why only the owner can talk to it. For hard isolation, run the bot under a separate OS user or in a container.
+For a guest the agent works under stricter rules, [GUEST.md](GUEST.md): only the guest's project folder and the bot's own code, never `.env`, `data/`, other projects, the home folder or the machine's settings; no owner's plugins or MCP servers (`agentGlobalSettings` does not apply). What the bot enforces itself, not through the agent: a guest's bot cannot open, switch to or archive a project that is not theirs, cannot see the owner's chat or session, and cannot change the machine-wide settings or update the bot; with Claude Code, the agent's own file tools (Read, Write, Edit) are denied `.env`, `data/`, other projects and private home folders (`~/.ssh`, `~/Library`, `~/Downloads`…) by permission rules that hold even with permissions skipped.
+
+This is a rule set, not an operating-system sandbox: the agent has the permissions of your user account, as it does in your terminal, and shell commands a guest's agent runs are bound by GUEST.md only. Share with people you trust with your computer. Claude Code's own sandbox was tried for guests and does not fit yet: Remotion's Chromium cannot render inside it on macOS. For hard isolation, run the bot under a separate OS user or in a container.
 
 ## Removing it
 

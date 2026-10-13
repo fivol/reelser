@@ -35,6 +35,7 @@ Manual install: the same steps, by hand, are in [SETUP.md](SETUP.md). Later, to 
 - **Clear errors.** Plan limit used up, not logged in, network down, outdated agent — the bot says so in plain words with the raw error and a **🔁 Retry** button. Files over Telegram's limits are compressed to fit (sending) or explained (receiving over 20 MB).
 - **Talk by voice.** Dictate ideas, answers and edits as voice messages; they are transcribed locally with Whisper, no API keys.
 - **Projects.** Keep separate sets of reels — your product, a partner's blog — each with its own brief, ideas, taste, music, reels and sent files, nothing shared. One is open at a time: `/projects` switches or starts a new one (with the same onboarding), and when you ask for something clearly about another topic, the agent offers to move it to a new or existing project. A reply or a tap on an old message from another project asks before acting. Daily ideas come for the open project.
+- **Share with people you trust.** `/projects` → «👥 Share» gives a one-time invite link to a project. The guest gets their own chat with the bot: only their projects (they can start new ones), their own agent session, up to 30 tasks a day; you see all their projects in `/projects`, your tasks go first, and `/people` takes a project back or closes access. The agent works for a guest under stricter rules ([GUEST.md](GUEST.md), [SECURITY.md](SECURITY.md)).
 - **Not pushy.** Daily ideas wait while you are busy with the bot. If a batch got no answer, no new ones pile up: a quiet reminder comes 2, 4, 8… days later with «send new ones» and «stop reminding». Every scheduled batch has «🔕 pause daily ideas».
 - **Memory in files, not in the chat.** Each project's brief, ideas backlog, taste playbook and every reel's history live in `projects/<name>/`. The agent session is just a cache: when it grows too big, too long or goes stale, the agent writes a handoff note and a fresh session continues from it. `/new` does the same on demand.
 - **Runs on your computer.** It works while the computer is on; on the charger it can keep the computer from falling asleep (one tap at setup or in `/settings`, no system settings changed).
@@ -43,27 +44,28 @@ Manual install: the same steps, by hand, are in [SETUP.md](SETUP.md). Later, to 
 - **It learns from everything.** Every edit, pick, rejection or correction is weighed right away: what would repeat goes into the project's `PLAYBOOK.md` as a rule, and every next version is checked against it, so you never say the same thing twice.
 - **A caption to post.** On accept you get the original file, the cover and a suggested post caption.
 
-Commands: `/ideas` — ideas now, `/unfinished` — get back to an unfinished reel, `/projects` — switch or start a project, `/settings` — when ideas arrive (time, days, off) and other switches, `/update` — check for a new version now, `/usage` — plan limits and what a reel takes, `/stop` — stop the current task, `/new` — fresh agent session.
+Commands: `/ideas` — ideas now, `/unfinished` — get back to an unfinished reel, `/projects` — switch, start or share a project, `/people` — who you share with, `/settings` — when ideas arrive (time, days, off) and other switches, `/update` — check for a new version now, `/usage` — plan limits and what a reel takes, `/stop` — stop the current task, `/new` — fresh agent session.
 
 ## Layout
 
 ```
 bot/          Telegram ↔ agent bridge (Node 22, no dependencies)
 REELS.md      the workflow the agent follows
+GUEST.md      extra limits when it works for someone you shared the bot with
 guides/       craft defaults the agent reads per task: hooks, frame, story, footage, caption
 template/     Remotion starter copied into every reel
 scripts/      new reel, render (foreground or background) with progress, loudness, beat grid
 test/         npm test — self-check, also run in CI on macOS, Linux and Windows
 starter/      seeds every new project
 projects/     yours, one folder per project: brief, ideas, playbook, reels/, inbox/  (gitignored)
-data/         bot state, machine-wide settings, logs                              (gitignored)
+data/         bot state, machine-wide settings, logs, guests' bots              (gitignored)
 ```
 
 Change settings in `/settings` or just by asking the bot («send ideas at 9», «stop sending ideas»). Technical settings — agent, model, session limits, speech model — are written by the installing agent into `.env` (see [.env.example](.env.example)).
 
 ## Good to know
 
-- **Who it talks to.** Only its owner: the installer gives you a personal link to the bot, and opening it makes the bot yours (or it asks «is this you?» on your computer). Everyone else gets a one-line «this is a personal bot». Private chats only — added to a group, it leaves.
+- **Who it talks to.** Its owner and the guests you invite: the installer gives you a personal link to the bot, and opening it makes the bot yours (or it asks «is this you?» on your computer). Everyone else gets a one-line «this is a personal bot». Private chats only — added to a group, it leaves.
 - **Safety.** Only you control it: the agent acts on your messages only, outside its folder only where you allow, never publishes anything, and updates only on your tap. Exactly what the code does — network, processes, files — is listed in [SECURITY.md](SECURITY.md); the installing agent checks it and explains it to you before installing.
 - **Cost.** It uses your agent's subscription or API account. A reel with a few revisions is a handful of long agent turns.
 - **Remotion license.** Free for individuals and companies of up to 3 people; larger companies need a [company license](https://www.remotion.dev/license).

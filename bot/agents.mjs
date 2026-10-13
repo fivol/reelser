@@ -23,6 +23,20 @@ function emptyMcp() {
   return file;
 }
 
+// Paths the agent's own file tools (Read, Write, Edit…) must not touch, as permission
+// deny rules, which hold even with permissions skipped. Shell commands are not covered:
+// for those the rules in GUEST.md are all there is (see SECURITY.md).
+const rulePath = (p) => p.replace(/\\/g, '/').replace(/^([A-Za-z]):/, (_, d) => `/${d.toLowerCase()}`);
+function denySettings(paths) {
+  const file = join(DATA, 'agent-deny.json');
+  const deny = paths.flatMap((p) => {
+    const rule = p.startsWith('~/') ? p : `/${rulePath(p)}`;
+    return [`Read(${rule})`, `Edit(${rule})`];
+  });
+  writeFileSync(file, JSON.stringify({permissions: {deny}}, null, 2));
+  return file;
+}
+
 const ADAPTERS = {
   claude: {
     bin: 'claude',
@@ -31,7 +45,7 @@ const ADAPTERS = {
     // Each message is echoed back (isReplay) once the agent has taken it in.
     live: true,
     encode: (text) => `${JSON.stringify({type: 'user', message: {role: 'user', content: text}})}\n`,
-    args: ({sessionId, model, isolated}) => [
+    args: ({sessionId, model, isolated, deny}) => [
       '-p',
       '--input-format', 'stream-json', '--replay-user-messages',
       '--output-format', 'stream-json', '--verbose',
@@ -39,6 +53,7 @@ const ADAPTERS = {
       // Without the owner's global settings, plugins, hooks and MCP servers. An empty
       // MCP config file, not inline JSON: cmd.exe on Windows mangles quotes.
       ...(isolated ? ['--setting-sources', 'project,local', '--strict-mcp-config', '--mcp-config', emptyMcp()] : []),
+      ...(deny?.length ? ['--settings', denySettings(deny)] : []),
       ...(model ? ['--model', model] : []),
       ...(sessionId ? ['--resume', sessionId] : []),
     ],
@@ -131,14 +146,15 @@ export function killTree(pid) {
  * Runs one agent turn. Calls onCall({tool, path?, command?}) on every tool call.
  * Resolves to {sessionId, text, earlier, error, cancelled, context, code, stderr, spawnError}; `kill()` on the returned
  * handle stops the agent and everything it spawned. The session survives a kill.
- * `studio` is the active project's folder.
+ * `studio` is the active project's folder; `deny`: paths (absolute, or `~/…`, a folder as
+ * `<dir>/**`) the agent's file tools may not read or edit (Claude Code only).
  * `send(text)` hands the running agent one more message (agents with `live` input only);
  * it returns false once the turn is over, and replies to earlier messages land in `earlier`.
  */
-export function runAgent({agent, bin, model, prompt, sessionId, onCall, isolated = false, studio}) {
+export function runAgent({agent, bin, model, prompt, sessionId, onCall, isolated = false, studio, deny}) {
   const a = ADAPTERS[agent];
   if (!a) throw new Error(`Unknown AGENT "${agent}", expected one of: ${AGENTS.join(', ')}`);
-  const child = spawn(bin || a.bin, a.args({sessionId, model, isolated}), {
+  const child = spawn(bin || a.bin, a.args({sessionId, model, isolated, deny}), {
     cwd: ROOT,
     stdio: ['pipe', 'pipe', 'pipe'],
     // npm-installed CLIs are .cmd shims on Windows, which only a shell can start.

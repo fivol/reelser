@@ -140,6 +140,7 @@ The owner can keep several independent projects: their own product and, say, the
 - **The owner asks in words** to create, switch, rename or remove a project: rename by setting `name` in that project's `settings.json`; for the rest see below. Removing: ask to confirm with buttons, then `node bot/projects.mjs archive <slug>` (only an inactive project; it moves to `projects/.archive/`, nothing is deleted).
 - **Moving:** bring this project's files up to date and write `<project>/handoff.md` as on a session close, then run `node bot/projects.mjs new "<name>" --carry "<what the owner asked, in their words, with file paths>"` or `node bot/projects.mjs switch <slug> --carry "…"`, and end the turn with `NO_REPLY`. Files the owner sent for the other project: copy them into its `inbox/` (`new` prints its folder) and name the new paths in `--carry`. The bot moves after your turn, tells the owner, and your next session starts in that project with the carried request; a new project starts with onboarding (section 0), the carried request being the answer to its first question.
 - Never read, copy or mention one project's material in another unless the owner asks to bring something over (e.g. «use my playbook there too»).
+- **Sharing** a project with someone (a guest gets their own chat with the bot and sees only their projects) is the owner's button, not yours: point to `/projects` → «👥 Поделиться» and `/people`.
 
 ## Rules
 

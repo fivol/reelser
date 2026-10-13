@@ -76,8 +76,11 @@ export function ideasDay(s, date) {
   return s.ideasDays === 'weekdays' ? !weekend : s.ideasDays === 'weekends' ? weekend : true;
 }
 
-/** Text and keyboard of a settings view: 'main' | 'time' | 'days'. */
-export function view(s, which, {lang, agent, project}) {
+/**
+ * Text and keyboard of a settings view: 'main' | 'time' | 'days'. A guest (bot/access.mjs)
+ * gets only their project's switches, none of the machine-wide ones.
+ */
+export function view(s, which, {lang, agent, project, guest = false}) {
   const t = L[lang];
   const at = s.ideasAt ?? '10:00';
   const days = s.ideasDays ?? 'daily';
@@ -92,14 +95,17 @@ export function view(s, which, {lang, agent, project}) {
     return {text: t.pickDays, reply_markup: {inline_keyboard: [...DAYS.map((d) => [btn(`${d === days ? '✅ ' : ''}${t.days[d]}`, `days:${d}`)]), [btn(t.back, 'main')]]}};
   }
   const updatesOn = s.updateChecks !== false && s.autoUpdate !== false;
-  const lines = [`**${t.title}**`, '', ...(project ? [t.project(project)] : []), at ? t.ideasOn(at, days) : t.ideasOff, t.awake(s.keepAwake === true), t.updates(updatesOn)];
-  if (agent === 'claude') lines.push(t.global(s.agentGlobalSettings === true), `_${t.globalHint}_`);
+  const lines = [`**${t.title}**`, '', ...(project ? [t.project(project)] : []), at ? t.ideasOn(at, days) : t.ideasOff];
+  if (!guest) lines.push(t.awake(s.keepAwake === true), t.updates(updatesOn));
+  if (!guest && agent === 'claude') lines.push(t.global(s.agentGlobalSettings === true), `_${t.globalHint}_`);
   const rows = at
     ? [[btn(t.time(at), 'time'), btn(t.daysBtn(days), 'days')], [btn(t.off, 'ideas:off')]]
     : [[btn(t.on, `at:${lastAt}`)]];
-  rows.push([btn(s.keepAwake === true ? t.awakeOff : t.awakeOn, 'awake')]);
-  rows.push([btn(updatesOn ? t.updatesOff : t.updatesOn, 'updates')]);
-  if (agent === 'claude') rows.push([btn(s.agentGlobalSettings === true ? t.globalHide : t.globalAllow, 'global')]);
+  if (!guest) {
+    rows.push([btn(s.keepAwake === true ? t.awakeOff : t.awakeOn, 'awake')]);
+    rows.push([btn(updatesOn ? t.updatesOff : t.updatesOn, 'updates')]);
+    if (agent === 'claude') rows.push([btn(s.agentGlobalSettings === true ? t.globalHide : t.globalAllow, 'global')]);
+  }
   rows.push([btn(t.close, 'close')]);
   return {text: lines.join('\n'), reply_markup: {inline_keyboard: rows}};
 }

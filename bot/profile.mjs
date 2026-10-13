@@ -18,7 +18,7 @@ const TEXT = {
       + '✅ «Принять» — и файл в полном качестве у тебя\n\n'
       + 'Нажми «Старт» и расскажи, о чём будут рилсы.',
     short: 'Идеи, монтаж и правки рилсов прямо в чате — текстом или голосом. Работает на твоём AI-агенте.',
-    commands: {ideas: 'Идеи для рилсов прямо сейчас', unfinished: 'Незаконченные рилсы — вернуться и доделать', projects: 'Проекты: сменить или начать новый', settings: 'Настройки: когда присылать идеи и другое', update: 'Проверить обновления бота', usage: 'Лимиты агента и сколько уходит на рилс', stop: 'Остановить текущую задачу', new: 'Начать новую сессию агента'},
+    commands: {ideas: 'Идеи для рилсов прямо сейчас', unfinished: 'Незаконченные рилсы — вернуться и доделать', projects: 'Проекты: сменить, начать новый, поделиться', people: 'С кем ты делишься проектами', settings: 'Настройки: когда присылать идеи и другое', update: 'Проверить обновления бота', usage: 'Лимиты агента и сколько уходит на рилс', stop: 'Остановить текущую задачу', new: 'Начать новую сессию агента'},
   },
   en: {
     description:
@@ -30,9 +30,19 @@ const TEXT = {
       + '✅ «Accept» — and the full-quality file is yours\n\n'
       + 'Press Start and tell me what your reels are about.',
     short: 'Reel ideas, editing and revisions right in the chat, by text or voice. Runs on your own AI agent.',
-    commands: {ideas: 'Reel ideas right now', unfinished: 'Unfinished reels — get back to one', projects: 'Projects: switch or start a new one', settings: 'Settings: when ideas arrive and more', update: 'Check for bot updates', usage: 'Agent limits and what a reel takes', stop: 'Stop the current task', new: 'Start a new agent session'},
+    commands: {ideas: 'Reel ideas right now', unfinished: 'Unfinished reels — get back to one', projects: 'Projects: switch, start a new one, share', people: 'Who you share projects with', settings: 'Settings: when ideas arrive and more', update: 'Check for bot updates', usage: 'Agent limits and what a reel takes', stop: 'Stop the current task', new: 'Start a new agent session'},
   },
 };
+
+// What a guest (bot/access.mjs) does not get: the machine and the plan stay the owner's.
+const OWNER_ONLY = ['people', 'update', 'usage'];
+
+/** A guest's command menu, set for their chat only. */
+export function guestCommands(tg, chatId, lang) {
+  const commands = Object.entries(TEXT[lang].commands).filter(([c]) => !OWNER_ONLY.includes(c))
+    .map(([command, description]) => ({command, description: description.replace(/, (поделиться|share)$/, '')}));
+  return tg.call('setMyCommands', {commands, scope: {type: 'chat', chat_id: chatId}});
+}
 
 /** Sets avatar, descriptions and commands once per PROFILE_VERSION. */
 export async function applyProfile(tg, token, state, lang) {

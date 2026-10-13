@@ -9,6 +9,10 @@ export const DATA = process.env.REELS_DATA || join(ROOT, 'data');
 // The owner's material, one folder per project: brief, ideas, playbook, reels, inbox.
 // One project is active at a time (state.project); bot/projects.mjs creates and switches them.
 export const PROJECTS = process.env.REELS_PROJECTS || join(ROOT, 'projects');
+// A guest's bot process (bot/guests.mjs) runs with its own DATA and this set to their
+// Telegram id; SHARED is the owner's data folder: access list, tools, the busy flag.
+export const GUEST = process.env.REELS_GUEST || '';
+export const SHARED = process.env.REELS_SHARED || DATA;
 export const FIRST_PROJECT = 'main';
 const STATE = join(DATA, 'state.json');
 // Machine-wide switches; everything else in settings belongs to the active project.
