@@ -70,6 +70,12 @@ export function createProject(name = '') {
   return slug;
 }
 
+/** True while the project's brief is still the starter one: onboarding is not done. */
+export function briefless(slug) {
+  const read = (f) => (existsSync(f) ? readFileSync(f, 'utf8') : '');
+  return read(join(dir(slug), 'brief.md')) === read(join(STARTER, 'brief.md'));
+}
+
 /**
  * True for a project nobody worked in: brief still the starter one, no reels, nothing
  * sent. Such a project is removed when the owner leaves it, so a stray tap leaves no trace.
@@ -77,7 +83,7 @@ export function createProject(name = '') {
 export function untouched(slug) {
   const read = (f) => (existsSync(f) ? readFileSync(f, 'utf8') : '');
   const reels = join(dir(slug), 'reels');
-  return read(join(dir(slug), 'brief.md')) === read(join(STARTER, 'brief.md'))
+  return briefless(slug)
     && !existsSync(join(dir(slug), 'inbox'))
     && (!existsSync(reels) || readdirSync(reels).every((f) => f.startsWith('.')));
 }

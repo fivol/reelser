@@ -12,7 +12,7 @@ import {join, relative, sep} from 'node:path';
 import {CHANNEL, DATA, FIRST_PROJECT, GUEST, PROJECTS, ROOT, SHARED, env, loadState, saveState, settings, studio, writeSettings} from './config.mjs';
 import {DEFAULT_TURNS, activeGuests, answerRequest, canSee, createInvite, cycleLimit, guest, guestsOf, redeemInvite, removable, request, requestAccess, revoke, ungrant} from './access.mjs';
 import {forward, seedGuest, startGuests, stopGuest, stopGuests} from './guests.mjs';
-import {createProject, dropRequest, ensureProjects, listProjects, projectAt, projectExists, projectName, removeProject, takeRequest, untouched} from './projects.mjs';
+import {briefless, createProject, dropRequest, ensureProjects, listProjects, projectAt, projectExists, projectName, removeProject, takeRequest, untouched} from './projects.mjs';
 import {APPROVED as CLAIM_APPROVED, REQUEST as CLAIM_REQUEST} from './claim.mjs';
 import {killTree, runAgent} from './agents.mjs';
 import {activityLabel, classify} from './activity.mjs';
@@ -1417,6 +1417,8 @@ setInterval(async () => {
   // Busy right now (a task runs, or the owner wrote in the last hour): later today.
   if (current || queue.length || Date.now() - (state.lastOwnerAt ?? 0) < 3_600_000) return;
   state.lastIdeasDay = day;
+  // Nothing to pitch from before onboarding, and onboarding ends with a batch of its own.
+  if (briefless(state.project)) return saveState(state);
   const waiting = state.ideasWaiting?.project === state.project ? state.ideasWaiting : null;
   if (!waiting) {
     state.ideasWaiting = {project: state.project, at: Date.now(), nudges: 0};
