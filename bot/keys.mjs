@@ -9,7 +9,9 @@ const FILE = join(DATA, 'keyboard.json');
 
 /** Always the last button under a batch of ideas; the bot adds it, not the agent. */
 export const moreIdeasLabel = () => (process.env.BOT_LANG === 'en' ? '🎲 More ideas' : '🎲 Другие идеи');
-/** Under a scheduled batch of ideas while they are on: pauses them. */
+/** Opens the prompt of a scheduled batch of ideas, so send.mjs can tell it from one the owner asked for. */
+export const SCHEDULED_IDEAS = '(The bot started this on its own: daily ideas';
+/** Under a scheduled batch of ideas only (one the owner asked for has no such button): pauses them. */
 export const pauseIdeasLabel = () => (process.env.BOT_LANG === 'en' ? '🔕 Pause daily ideas' : '🔕 Пока не присылать идеи');
 const KEY_LINE = /\n?\s*⌨️\s*(.+?)\s*$/;
 

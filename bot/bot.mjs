@@ -11,7 +11,7 @@ import {APPROVED as CLAIM_APPROVED, REQUEST as CLAIM_REQUEST} from './claim.mjs'
 import {killTree, runAgent} from './agents.mjs';
 import {activityLabel, classify} from './activity.mjs';
 import {activeMenu, onMenuButton, onMenuText, postPending} from './menu.mjs';
-import {currentKeys, forgetKeys, replyKeyboard, splitKeyLine} from './keys.mjs';
+import {SCHEDULED_IDEAS, currentKeys, forgetKeys, replyKeyboard, splitKeyLine} from './keys.mjs';
 import {applyProfile} from './profile.mjs';
 import {keepAwake, taskAwake} from './awake.mjs';
 import {acceptedText, codexLimits, limitWarnings, recordTurn, touchedReel, usageText} from './usage.mjs';
@@ -69,7 +69,7 @@ const T = {
     updateCheckFailed: (e) => `⚠️ Не смог проверить обновления: ${e}`,
     backedUp: (dir) => `твои правки в файлах бота сохранены в ${dir}`,
     ideasPrompt: 'Пачка идей для рилсов: раздел «1. Ideas» в REELS.md.',
-    scheduledIdeasPrompt: (at) => `(The bot started this on its own: daily ideas, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
+    scheduledIdeasPrompt: (at) => `${SCHEDULED_IDEAS}, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
     ideasNudge: '💡 Идеи с прошлого раза ещё ждут. Прислать свежие?\n\nИли просто напиши, что хочешь: свою идею, правку к рилсу, вопрос — я на связи.',
     ideasFresh: '🎲 Прислать новые',
     ideasStop: '🔕 Не напоминать',
@@ -121,7 +121,7 @@ const T = {
     updateCheckFailed: (e) => `⚠️ Could not check for updates: ${e}`,
     backedUp: (dir) => `your edits to the bot's files are saved in ${dir}`,
     ideasPrompt: 'A batch of reel ideas: section "1. Ideas" in REELS.md.',
-    scheduledIdeasPrompt: (at) => `(The bot started this on its own: daily ideas, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
+    scheduledIdeasPrompt: (at) => `${SCHEDULED_IDEAS}, scheduled for ${at}.) A batch of reel ideas per «1. Ideas» in REELS.md. Start the message with one line saying these are the scheduled ideas for today (${at}; the time can be changed in /settings).`,
     ideasNudge: '💡 The ideas from last time are still waiting. Send fresh ones?\n\nOr just tell me what you want: your own idea, an edit, a question — I am here.',
     ideasFresh: '🎲 Send new ones',
     ideasStop: '🔕 Stop reminding',

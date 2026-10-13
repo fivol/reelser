@@ -18,7 +18,7 @@ import {join} from 'node:path';
 import {parseArgs} from 'node:util';
 import {DATA, env, loadState, settings} from './config.mjs';
 import {createMenu, customHint, deferMenu, tuneLabel} from './menu.mjs';
-import {moreIdeasLabel, pauseIdeasLabel, replyKeyboard} from './keys.mjs';
+import {SCHEDULED_IDEAS, moreIdeasLabel, pauseIdeasLabel, replyKeyboard} from './keys.mjs';
 import {keyboard, telegram} from './telegram.mjs';
 
 const {values: o} = parseArgs({
@@ -43,7 +43,7 @@ if (o.status !== undefined) {
   process.exit(0);
 }
 
-const {chatId} = loadState();
+const {chatId, pending} = loadState();
 if (!chatId) {
   console.error('No owner yet: nobody has written to the bot.');
   process.exit(1);
@@ -60,8 +60,9 @@ if (o.text) {
     if (menuId) keys.push(tuneLabel());
     // A batch of ideas always ends with «More ideas», whatever the agent passed.
     const more = o.ideas ? moreIdeasLabel() : undefined;
-    // While daily ideas are on, the owner can pause them right there.
-    const pause = more && settings().ideasAt !== '' ? pauseIdeasLabel() : undefined;
+    // Under a scheduled batch the owner can pause the schedule right there; a batch they asked for has no such button.
+    const scheduled = pending?.includes(SCHEDULED_IDEAS) && settings().ideasAt !== '';
+    const pause = more && scheduled ? pauseIdeasLabel() : undefined;
     if (more) keys.splice(0, keys.length, ...keys.filter((k) => !/^[🎲🔕]/u.test(k)), more, ...(pause ? [pause] : []));
     markup = replyKeyboard(keys, {menu: menuId, tune: tuneLabel(), more, pause, placeholder: customHint().replace(/^✍️\s*/, '')});
   } else if (buttons || menuId) {
