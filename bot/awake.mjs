@@ -39,7 +39,7 @@ function start() {
     return spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'ByPass', '-Command', WIN_SCRIPT], {stdio: 'ignore', windowsHide: true});
   }
   if (!linuxOnAc()) return null;
-  return spawn('systemd-inhibit', ['--what=sleep:idle', '--who=reels-bot', '--why=Telegram reels bot is running', '--mode=block', 'sleep', 'infinity'], {stdio: 'ignore'});
+  return spawn('systemd-inhibit', ['--what=sleep:idle', '--who=reelser', '--why=Telegram reels bot is running', '--mode=block', 'sleep', 'infinity'], {stdio: 'ignore'});
 }
 
 function stop() {
@@ -83,7 +83,7 @@ export function taskAwake(on) {
       ? spawn('caffeinate', ['-i', '-w', String(process.pid)], {stdio: 'ignore'})
       : process.platform === 'win32'
         ? spawn('powershell', ['-NoProfile', '-ExecutionPolicy', 'ByPass', '-Command', WIN_TASK], {stdio: 'ignore', windowsHide: true})
-        : spawn('systemd-inhibit', ['--what=sleep:idle', '--who=reels-bot', '--why=Reels bot is working on a task', '--mode=block', 'sleep', 'infinity'], {stdio: 'ignore'});
+        : spawn('systemd-inhibit', ['--what=sleep:idle', '--who=reelser', '--why=Reels bot is working on a task', '--mode=block', 'sleep', 'infinity'], {stdio: 'ignore'});
     taskHolder.on('error', () => (taskHolder = null));
   } catch {
     taskHolder = null;

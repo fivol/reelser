@@ -50,7 +50,7 @@ The agent (Claude Code or Codex) talks to its own provider and, while making a r
 
 - Written by the bot: `data/` (state, logs, who has access and each guest's own bot state in `data/guests/`, files the owner sent, menus, render jobs, backups of bot files you edited before an update replaced them), `projects/` (per project: brief, ideas, playbook, reels, files the owner sent), `template/node_modules`; on an approved update, the bot's own files in this folder.
 - Caches of the tools it starts (uv's package cache, the Whisper model, npm, Remotion's Chromium) go to the usual per-user cache folders.
-- Outside the folder, once at setup: one autostart entry — `~/Library/LaunchAgents/com.reels-bot.plist` (macOS), `~/.config/systemd/user/reels-bot.service` (Linux) or `reels-bot.vbs` in the Startup folder (Windows).
+- Outside the folder, once at setup: one autostart entry — `~/Library/LaunchAgents/com.reelser.plist` (macOS), `~/.config/systemd/user/reelser.service` (Linux) or `reelser.vbs` in the Startup folder (Windows).
 - Secrets: the bot token and `OWNER_CODE` live only in `.env` (gitignored, never printed, never sent anywhere but Telegram).
 
 ## What the agent may do

@@ -1,5 +1,5 @@
 [Unit]
-Description=reels-bot
+Description=reelser
 After=network-online.target
 
 [Service]

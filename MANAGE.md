@@ -1,12 +1,13 @@
 # Managing an installed bot (for the agent)
 
-The user comes back to the chat where you installed the bot and asks for something. Same style as setup: in their language, 1–2 lines per message, choices as buttons with the recommended one first, and ask before anything irreversible. The bot's folder is where you installed it (usually `~/reels-bot`); `data/bot.log` is its log.
+The user comes back to the chat where you installed the bot and asks for something. Same style as setup: in their language, 1–2 lines per message, choices as buttons with the recommended one first, and ask before anything irreversible. The bot's folder is where you installed it (usually `~/reelser`); `data/bot.log` is its log.
 
 Autostart entry, per OS (from setup step 7):
-- macOS: `~/Library/LaunchAgents/com.reels-bot.plist` — `launchctl bootout gui/$(id -u)/com.reels-bot` stops it, `launchctl bootstrap gui/$(id -u) <plist>` starts it, `launchctl kickstart -k gui/$(id -u)/com.reels-bot` restarts it.
-- Linux: `systemctl --user stop|start|restart reels-bot`.
-- Windows: `reels-bot.vbs` in the Startup folder; stop with `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object CommandLine -like '*reels-bot*' | ForEach-Object { Stop-Process -Id $_.ProcessId }`, start with `wscript "<that file>"`.
+- macOS: `~/Library/LaunchAgents/com.reelser.plist` — `launchctl bootout gui/$(id -u)/com.reelser` stops it, `launchctl bootstrap gui/$(id -u) <plist>` starts it, `launchctl kickstart -k gui/$(id -u)/com.reelser` restarts it.
+- Linux: `systemctl --user stop|start|restart reelser`.
+- Windows: `reelser.vbs` in the Startup folder; stop with `Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object CommandLine -like '*reelser*' | ForEach-Object { Stop-Process -Id $_.ProcessId }`, start with `wscript "<that file>"`.
 - Started «only now» (no autostart): stop by the pid in `data/bot.pid` (kill the process tree), start with `node bot/run.mjs` in the background.
+- Installed before the rename to Reelser: these names and the folder say `reels-bot` instead of `reelser`; use whichever exists.
 
 | The user wants | Do |
 |---|---|

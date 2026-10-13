@@ -13,7 +13,7 @@ import {promisify} from 'node:util';
 import {DATA, ROOT} from './config.mjs';
 
 const run = promisify(execFile);
-const REPO = process.env.REELS_REPO || 'fivol/reels-bot';
+const REPO = process.env.REELS_REPO || 'fivol/reelser';
 const BRANCH = process.env.REELS_BRANCH || 'main';
 const VERSION = join(DATA, 'version.json');
 const MANIFEST = join(DATA, 'manifest.json');
@@ -23,7 +23,7 @@ const git = async (...args) => (await run('git', args, {cwd: ROOT, timeout: 120_
 // ---------- GitHub API (archive mode) ----------
 
 async function api(path) {
-  const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {headers: {accept: 'application/vnd.github+json', 'user-agent': 'reels-bot'}, signal: AbortSignal.timeout(30_000)});
+  const res = await fetch(`https://api.github.com/repos/${REPO}${path}`, {headers: {accept: 'application/vnd.github+json', 'user-agent': 'reelser'}, signal: AbortSignal.timeout(30_000)});
   if (!res.ok) throw new Error(`GitHub API ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return res.json();
 }
@@ -100,7 +100,7 @@ export async function upstreamHead() {
   return latest?.sha ?? null;
 }
 
-/** Where updates come from, e.g. https://github.com/fivol/reels-bot. */
+/** Where updates come from, e.g. https://github.com/fivol/reelser. */
 export async function remoteUrl() {
   if (!isGit()) return `https://github.com/${REPO}`;
   const url = await git('remote', 'get-url', 'origin').catch(() => '');

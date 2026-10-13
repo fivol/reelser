@@ -55,7 +55,7 @@ const T = {
     fresh: '🆕 Следующее сообщение начнёт новую сессию. Что важно — сохраню перед этим.',
     unfinished: '🗂 Незаконченные рилсы — выбери, к какому вернуться:',
     hint: 'Или напиши / надиктуй свой вариант',
-    private: 'Это личный бот. Свой можно поставить: github.com/fivol/reels-bot',
+    private: 'Это личный бот. Свой можно поставить: github.com/fivol/reelser',
     conflict: '⚠️ С этим же ключом Telegram запущен ещё один бот (на другом компьютере?). Пока он работает, я не получаю сообщения. Останови второй или попроси агента выпустить новый ключ.',
     confirmOnComputer: '👋 Привет! Подтверди на компьютере, в окне установки, что это ты, — и начнём.',
     tooBig: (what, size) => `⚠️ ${what} весит ${size} — Telegram не даёт ботам скачивать файлы больше 20 МБ. Пришли его обычным видео/фото (не «файлом» — Telegram сам сожмёт), ссылкой на Google Диск / Яндекс Диск или скинь на компьютер, где я работаю (AirDrop кладёт в «Загрузки»), и напиши мне — найду и заберу сам.`,
@@ -123,7 +123,7 @@ const T = {
     denyBtn: '🚫 Отказать',
     admitted: (who, name) => (name ? `${who} → «${name}»` : `${who}: доступ открыт, начнёт с онбординга`),
     deniedLabel: (who) => `${who}: отказано`,
-    requestDenied: 'Владелец не открыл тебе доступ к этому боту. Свой можно поставить: github.com/fivol/reels-bot',
+    requestDenied: 'Владелец не открыл тебе доступ к этому боту. Свой можно поставить: github.com/fivol/reelser',
   },
   en: {
     hello: '🎬 Hi! I make reels: I pitch ideas, edit the ones you pick and revise them from your replies to the video.\n\n🎙 You can talk to me with voice messages, it is often faster: dictate an idea or edits and I will get it.\n\n✍️ While I work you can keep writing and correcting: I take it in at once, no need to wait.\n\nFirst tell me what the reels are about: product, link, audience.',
@@ -138,7 +138,7 @@ const T = {
     fresh: '🆕 The next message starts a new session. What matters is saved first.',
     unfinished: '🗂 Unfinished reels — pick one to get back to:',
     hint: 'Or type / dictate your own',
-    private: 'This is a personal bot. Get your own: github.com/fivol/reels-bot',
+    private: 'This is a personal bot. Get your own: github.com/fivol/reelser',
     conflict: '⚠️ Another copy of this bot runs with the same Telegram key (another computer?). While it runs I get no messages. Stop it or ask the agent for a new key.',
     confirmOnComputer: '👋 Hi! Confirm on your computer, in the setup window, that this is you — and we start.',
     tooBig: (what, size) => `⚠️ The ${what} is ${size} — Telegram does not let bots download files over 20 MB. Send it as a regular video/photo (not as a file, Telegram compresses it), as a Google Drive / Dropbox link, or put it on the computer I run on (AirDrop lands in Downloads) and tell me — I will find it and take it myself.`,
@@ -206,7 +206,7 @@ const T = {
     denyBtn: '🚫 Say no',
     admitted: (who, name) => (name ? `${who} → «${name}»` : `${who}: access open, starts with onboarding`),
     deniedLabel: (who) => `${who}: declined`,
-    requestDenied: 'The owner did not open this bot to you. Get your own: github.com/fivol/reels-bot',
+    requestDenied: 'The owner did not open this bot to you. Get your own: github.com/fivol/reelser',
   },
 }[LANG];
 
@@ -1588,7 +1588,7 @@ setInterval(() => {
 
 // ---------- long polling ----------
 
-console.log(`reels-bot up: agent=${env.agent}, owner=${state.ownerId ?? 'none yet'}`);
+console.log(`reelser up: agent=${env.agent}, owner=${state.ownerId ?? 'none yet'}`);
 if (state.statusId) await deleteStatus(state.statusId);
 await announceUpdate();
 await flushOutbox().catch((e) => console.error('outbox', e));

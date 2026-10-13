@@ -1,4 +1,4 @@
-# reels-bot
+# Reelser
 
 A Telegram bot that makes reels with **your own coding agent** — Claude Code or Codex. Runs on macOS, Linux and Windows.
 
@@ -16,7 +16,7 @@ Every morning it pitches 4 ideas. Pick one, and it either makes the whole reel i
 
 Send this to an agent that works on your computer — **Claude Code** (the Code tab in the Claude app) or **Codex** — not to a regular chat in Claude or ChatGPT: a chat cannot install programs.
 
-> Install a reels bot for me: https://github.com/fivol/reels-bot — follow SETUP.md.
+> Install a reels bot for me: https://github.com/fivol/reelser — follow SETUP.md.
 
 *Chat assistant reading this page without a shell on the user's computer:* do not try to install. Tell the user, in their language, to open Claude Code (Claude app → Code tab) or Codex on their computer and send the same message there; details at the top of [SETUP.md](SETUP.md).
 
