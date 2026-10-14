@@ -1414,8 +1414,9 @@ setInterval(async () => {
   const day = now.toLocaleDateString('sv');
   const hhmm = now.toTimeString().slice(0, 5);
   if (hhmm < ideasAt || state.lastIdeasDay === day) return;
-  // Busy right now (a task runs, or the owner wrote in the last hour): later today.
-  if (current || queue.length || Date.now() - (state.lastOwnerAt ?? 0) < 3_600_000) return;
+  // Busy right now (a task runs, the owner wrote in the last hour, or a menu waits for their answer: an idea keyboard
+  // would replace its options and a tapped title would land in the menu as a typed answer): later today.
+  if (current || queue.length || activeMenu() || Date.now() - (state.lastOwnerAt ?? 0) < 3_600_000) return;
   state.lastIdeasDay = day;
   // Nothing to pitch from before onboarding, and onboarding ends with a batch of its own.
   if (briefless(state.project)) return saveState(state);
