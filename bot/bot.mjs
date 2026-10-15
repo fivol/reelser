@@ -24,7 +24,7 @@ import {acceptedText, codexLimits, limitWarnings, recordTurn, touchedReel, usage
 import {badTime, ideasDay, onSettingsButton, parseTime, view as settingsView} from './prefs.mjs';
 import {transcribe} from './stt.mjs';
 import {describe, remember} from './intake.mjs';
-import {explain, lostSession} from './errors.mjs';
+import {errorKind, explain, lostSession, transient, vendor} from './errors.mjs';
 import * as updates from './update.mjs';
 const {botChangedSince, head, pendingUpdates, pullUpdates, remoteUrl, upstreamHead} = updates;
 import {telegram} from './telegram.mjs';
@@ -47,6 +47,8 @@ const T = {
     heard: '↪️ Получил, учитываю, продолжаю ниже',
     writeAnyTime: '✍️ Можно дописывать по ходу — учту сразу',
     accepted: '⏳ Начинаю',
+    netRetry: (who, kind, wait, n, of) => `${kind === 'overloaded' ? `⏳ Серверы ${who} перегружены.` : `🔌 Связь с ${who} оборвалась — обычно это нестабильный интернет или VPN.`} Продолжу сам через ${wait} (попытка ${n} из ${of}), сделанное не потеряется.`,
+    sec: (s) => (s < 60 ? `${s} с` : `${Math.round(s / 60)} мин`),
     keysGone: '👌 Принял',
     cancelled: '⏹ Остановил.',
     stop: '⏹ Стоп',
@@ -130,6 +132,8 @@ const T = {
     heard: '↪️ Got it, taking it in, continuing below',
     writeAnyTime: '✍️ Keep writing as I go, I take it in at once',
     accepted: '⏳ Starting',
+    netRetry: (who, kind, wait, n, of) => `${kind === 'overloaded' ? `⏳ ${who}'s servers are overloaded.` : `🔌 The connection to ${who} dropped — usually a shaky internet or VPN.`} I continue on my own in ${wait} (try ${n} of ${of}); nothing done is lost.`,
+    sec: (s) => (s < 60 ? `${s} s` : `${Math.round(s / 60)} min`),
     keysGone: '👌 Got it',
     cancelled: '⏹ Stopped.',
     stop: '⏹ Stop',
@@ -988,6 +992,7 @@ async function runTurn(prompt, retried = false) {
   }
   const res = await runWithStatus(prompt, T.accepted, {open: true});
   delete state.pending;
+  if (!res.error) delete state.netRetry;
   saveState(state);
   if (res.cancelled && (res.reason === 'stalled' || res.reason === 'overtime')) {
     return onAgentError({...res, error: true, forcedKind: res.reason}, prompt, true);
@@ -1046,7 +1051,13 @@ async function onAgentError(res, prompt, retried) {
     saveState(state);
     return runTurn(prompt, true);
   }
-  const e = explain(res, {lang: LANG, bin: env.agentBin || env.agent, channel: CHANNEL});
+  if (transient(errorKind(res)) && (state.netRetry?.tries ?? 0) < NET_RETRY_DELAYS.length) return retryLater(res, prompt);
+  // Out of retries: the Retry button re-sends the owner's message, not the «continue».
+  const tries = state.netRetry?.tries ?? 0;
+  if (state.netRetry) prompt = state.netRetry.prompt;
+  delete state.netRetry;
+  saveState(state);
+  const e = explain(res, {lang: LANG, bin: env.agentBin || env.agent, agent: env.agent, channel: CHANNEL, tries});
   console.error('agent error', e.kind, res.code, (res.text ?? '').slice(0, 300));
   if (e.kind === 'context') {
     // Too long to even write a handoff: drop the session, the files keep the memory.
@@ -1054,6 +1065,44 @@ async function onAgentError(res, prompt, retried) {
     saveState(state);
   }
   await tg.sendText(state.chatId, e.text, {reply_markup: replyKeyboard([e.retry], {retry: prompt, retryLabel: e.retry})});
+}
+
+// A dropped connection or overloaded servers usually pass: the bot resumes the same
+// session on its own a few times, with pauses, before it bothers the owner. The session
+// keeps every step finished before the drop, so each try goes on from there.
+const NET_RETRY_DELAYS = [15, 60, 180];
+let retryTimer = null;
+
+async function retryLater(res, prompt) {
+  const r = (state.netRetry ??= {tries: 0, prompt});
+  r.tries++;
+  const wait = NET_RETRY_DELAYS[r.tries - 1];
+  state.note = 'Your previous turn was cut off by a connection error. Check what is already done on disk and in this conversation, then carry on from there without redoing or resending anything.';
+  // Kept as pending, so a restart meanwhile retries right away.
+  state.pending = state.sessionId ? 'Continue.' : r.prompt;
+  saveState(state);
+  console.log(`agent ${errorKind(res)} error, retry ${r.tries} in ${wait} s`);
+  const msg = await tg.call('sendMessage', {chat_id: state.chatId, text: T.netRetry(vendor(env.agent), errorKind(res), T.sec(wait), r.tries, NET_RETRY_DELAYS.length), disable_notification: true}).catch(() => null);
+  r.msgId = msg?.message_id;
+  saveState(state);
+  retryTimer = setTimeout(() => {
+    const next = state.pending;
+    cancelRetry();
+    if (next) enqueue(next, {byOwner: false});
+  }, wait * 1000);
+}
+
+/** Drops a scheduled retry (the owner wrote or stopped meanwhile); true if there was one. */
+function cancelRetry() {
+  const r = state.netRetry;
+  if (r?.msgId) tg.call('deleteMessage', {chat_id: state.chatId, message_id: r.msgId}, {retries: 1}).catch(() => {});
+  if (r) delete r.msgId;
+  if (!retryTimer) return false;
+  clearTimeout(retryTimer);
+  retryTimer = null;
+  delete state.pending;
+  saveState(state);
+  return true;
 }
 
 // Rotate a due session while idle (right after a task, or once its cache has gone
@@ -1082,6 +1131,7 @@ async function drain() {
     let prompt = queue.splice(0).join('\n\n---\n\n');
     saveQueue();
     if (!guestTurn()) continue;
+    cancelRetry();
     if (state.note) {
       prompt = `(${state.note})\n\n${prompt}`;
       delete state.note;
@@ -1174,6 +1224,15 @@ function interrupt(reason) {
   if (reason === 'stop') {
     queue.length = 0;
     saveQueue();
+    if (cancelRetry()) {
+      delete state.note;
+      delete state.netRetry;
+      saveState(state);
+      if (!current) {
+        tg.sendText(state.chatId, T.cancelled, {silent: true}).catch(() => {});
+        return true;
+      }
+    }
   }
   if (!current) return false;
   current.reason = reason;
@@ -1597,6 +1656,7 @@ await announceUpdate();
 await flushOutbox().catch((e) => console.error('outbox', e));
 // Restore work interrupted by a restart: the message in progress first, then the queue.
 const restored = [state.pending, ...(state.queue ?? [])].filter(Boolean);
+cancelRetry();
 const unbatched = state.batch ?? [];
 delete state.pending;
 state.queue = [];
