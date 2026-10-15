@@ -47,7 +47,9 @@ const T = {
     heard: '↪️ Получил, учитываю, продолжаю ниже',
     writeAnyTime: '✍️ Можно дописывать по ходу — учту сразу',
     accepted: '⏳ Начинаю',
-    netRetry: (who, kind, wait, n, of) => `${kind === 'overloaded' ? `⏳ Серверы ${who} перегружены.` : `🔌 Связь с ${who} оборвалась — обычно это нестабильный интернет или VPN.`} Продолжу сам через ${wait} (попытка ${n} из ${of}), сделанное не потеряется.`,
+    netRetry: (who, kind, wait) => `🔄 ${kind === 'overloaded' ? `Серверы ${who} перегружены` : 'Ошибка сети'}, повторю через ${wait}`,
+    resuming: '🔄 Повторяю, продолжаю с того же места',
+    netHint: (who) => `ℹ️ Связь с ${who} сегодня несколько раз обрывалась. Я продолжал сам, но задачи шли дольше. Обычно дело в VPN: смени в нём сервер или включи режим «для всего компьютера» (TUN).`,
     sec: (s) => (s < 60 ? `${s} с` : `${Math.round(s / 60)} мин`),
     keysGone: '👌 Принял',
     cancelled: '⏹ Остановил.',
@@ -132,7 +134,9 @@ const T = {
     heard: '↪️ Got it, taking it in, continuing below',
     writeAnyTime: '✍️ Keep writing as I go, I take it in at once',
     accepted: '⏳ Starting',
-    netRetry: (who, kind, wait, n, of) => `${kind === 'overloaded' ? `⏳ ${who}'s servers are overloaded.` : `🔌 The connection to ${who} dropped — usually a shaky internet or VPN.`} I continue on my own in ${wait} (try ${n} of ${of}); nothing done is lost.`,
+    netRetry: (who, kind, wait) => `🔄 ${kind === 'overloaded' ? `${who}'s servers are overloaded` : 'Network error'}, retrying in ${wait}`,
+    resuming: '🔄 Retrying, going on from where it stopped',
+    netHint: (who) => `ℹ️ The connection to ${who} dropped several times today. I carried on myself, but tasks took longer. It is usually the VPN: switch its server or use the whole-computer mode (TUN).`,
     sec: (s) => (s < 60 ? `${s} s` : `${Math.round(s / 60)} min`),
     keysGone: '👌 Got it',
     cancelled: '⏹ Stopped.',
@@ -990,7 +994,7 @@ async function runTurn(prompt, retried = false) {
     delete state.pending;
     return saveState(state);
   }
-  const res = await runWithStatus(prompt, T.accepted, {open: true});
+  const res = await runWithStatus(prompt, state.netRetry ? T.resuming : T.accepted, {open: true});
   delete state.pending;
   if (!res.error) delete state.netRetry;
   saveState(state);
@@ -1037,6 +1041,7 @@ async function runTurn(prompt, retried = false) {
   // The agent asked to move to another project (bot/projects.mjs); it already saved this one.
   const req = takeRequest();
   if (req) requestSwitch({...req, saved: true});
+  await netHint();
 }
 
 // Notifications: only messages that need the owner (questions, versions, results,
@@ -1077,12 +1082,14 @@ async function retryLater(res, prompt) {
   const r = (state.netRetry ??= {tries: 0, prompt});
   r.tries++;
   const wait = NET_RETRY_DELAYS[r.tries - 1];
+  const kind = errorKind(res);
+  if (kind === 'network') state.netDrops = [...recentDrops(), Date.now()];
   state.note = 'Your previous turn was cut off by a connection error. Check what is already done on disk and in this conversation, then carry on from there without redoing or resending anything.';
   // Kept as pending, so a restart meanwhile retries right away.
   state.pending = state.sessionId ? 'Continue.' : r.prompt;
   saveState(state);
-  console.log(`agent ${errorKind(res)} error, retry ${r.tries} in ${wait} s`);
-  const msg = await tg.call('sendMessage', {chat_id: state.chatId, text: T.netRetry(vendor(env.agent), errorKind(res), T.sec(wait), r.tries, NET_RETRY_DELAYS.length), disable_notification: true}).catch(() => null);
+  console.log(`agent ${kind} error, retry ${r.tries} in ${wait} s`);
+  const msg = await tg.call('sendMessage', {chat_id: state.chatId, text: T.netRetry(vendor(env.agent), kind, T.sec(wait)), disable_notification: true}).catch(() => null);
   r.msgId = msg?.message_id;
   saveState(state);
   retryTimer = setTimeout(() => {
@@ -1090,6 +1097,18 @@ async function retryLater(res, prompt) {
     cancelRetry();
     if (next) enqueue(next, {byOwner: false});
   }, wait * 1000);
+}
+
+// Drops the retries cured are not worth a word; frequent ones slow every task down, so
+// the owner hears once a day that the VPN is the likely cause.
+const recentDrops = () => (state.netDrops ?? []).filter((t) => Date.now() - t < DAY);
+
+async function netHint() {
+  state.netDrops = recentDrops();
+  if (state.netDrops.length < 3 || Date.now() - (state.netHintAt ?? 0) < DAY) return saveState(state);
+  state.netHintAt = Date.now();
+  saveState(state);
+  await tg.sendText(state.chatId, T.netHint(vendor(env.agent)), {silent: true}).catch(() => {});
 }
 
 /** Drops a scheduled retry (the owner wrote or stopped meanwhile); true if there was one. */
